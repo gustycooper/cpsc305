@@ -1,0 +1,7 @@
+cog     5     5.5  24
+screw 4 4.4 100
+handlebar 6 6.5 5
+wheel 200 3000.9 10
+bolt 7 7.5 102
+headset 4 4.4 12
+recumbentbicycle 100 3000.9 2

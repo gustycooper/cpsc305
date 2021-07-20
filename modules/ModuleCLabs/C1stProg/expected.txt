@@ -1,0 +1,4 @@
+C programming is fun!
+C   p r o g r a m m i n g   i s   f u n ! 
+equal
+67 32 112 114 111 103 114 97 109 109 105 110 103 32 105 115 32 102 117 110 33 

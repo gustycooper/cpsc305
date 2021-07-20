@@ -1,0 +1,51 @@
+Step 1
+
+A global variable part global_part that is accessed in main.c and part.c.
+
+A static variable part static_part that is accessed by main and get_static_part. get_static_part uses terminal I/O to assign values to static_part members. main prints static_part.
+
+get_static_part reads values from the terminal into local variables and copies those variables into static_part. Notice strcpy is called to copy the local variable name into static_part.name.
+When you declare a variable such as part local_p, the variable local_p has enough memory to hold the entire struct. Likewise, when you declare an array such as part pa[3], you get enough memory to hold 3 part structs.
+
+Notice main reads values from the terminal directly into the elements of the array pa. Contrast this to get_static_part that reads values into local variables and copies them into a part.
+
+Step 2
+
+part p and part *q reference the same part. This allows us to manipulate one part with two variables.
+
+Using a pointer to access members of a struct has two notations.
+p->cost - this is a nice notation.
+(*p).cost - this is clumsy notation. The parentheses are needed because the dot (.) operator has a higher precedence than the asterisk (*) operator.
+
+The two functions update_cost1 and update_cost2 work differently. update_cost1 passes a part by value. When update_cost1 changes part p formal parameter, the changes are made to the local variable p. update_cost2 passes a part by reference. When update_cost2 changes part *p formal parameter, the value of part p in main is changed.
+
+Step 3
+
+A variable of type part has enough memory to hold a part. A variable of type part* has enough memory to hold an address.
+
+We read values for a part from the terminal and pass those values to new_part to “construct” a part.
+
+Pointers to a part and a part array are interchangeable.
+	part pa[3] = {{"A", 1, 10}, {"B", 2, 20}, {"C", 3, 30}};
+	part *pap;
+    	pap = pa;
+	pa[1], pap[1], and *(pap+1) access the same part
+
+Step 4
+
+Read the contents of filename into a part parts[]. This is done with an open-do-close pattern - open a file, do I/O with a file, and close the file. Each line of the file defines a part - name, number, cost, and count are separated by a space. The format of the file is shown by the following example that has three parts.
+screw 4 4.4 100
+handlebar 6 6.5 10
+wheel 200 3000.9 24
+
+Return the number of parts in the pass by reference parameter int *num_of_parts.
+
+The main.c file demonstrates using the part type. You should observe the following.
+
+main declares a part pa[100] in which to read the file. If the file contains more than 100 parts, read_parts will place parts into memory that does not belong to pa.
+
+main declares an int num in which read_parts places the number of parts read into the array. Notice the pass by reference of &num as the actual parameter, which matches the int *num_of_parts formal parameter.
+
+void print_expensive(part *parts, int num_of_parts) - this function prints the most expensive part in parts or the message multiple equally expensive parts.
+
+part *find_longest(part *parts, int num_of_parts) requirements - this function prints is similar to print_expensive, but it examines the length of part names. The function returns a pointer to the part with the longest name or NULL if there are multiple parts with equally longest names.

@@ -1,0 +1,102 @@
+print_cup(c) - intial values: red 12 10 TEA PAPER
+status from overflowing cup: -1
+print_cup(c) - after filling: red 12 12 MIXED PAPER
+print_cup(*p): pink 30 24 WATER GLASS
+print_cups(ca, 4, WATER):
+cup[0]: red 12 12 MIXED PAPER
+cup[1]: blue 16 9 COFFEE GLASS
+cup[2]: pink 30 24 WATER GLASS
+cup[3]: green 21 20 WATER PLASTIC
+print_cup(fine_fullest(ca_p, 4)): red 12 12 MIXED PAPER
+
+cups[] values
+cup[0]: red 12 12 TEA PAPER
+cup[1]: blue 8 6 COFFEE GLASS
+cup[2]: blue 24 12 COFFEE PLASTIC
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: purple 100 100 WATER PAPER
+cup[5]: blue 12 12 TEA PAPER
+cup[6]: green 8 7 MILK GLASS
+cup[7]: orange 16 1 MILK PLASTIC
+cup[8]: red 16 12 TEA PAPER
+cup[9]: fushia 2 1 COFFEE GLASS
+cup[10]: pink 32 0 WATER PAPER
+
+cups_p[] values, each element points to a cups[]
+cup[0]: red 12 12 TEA PAPER
+cup[1]: blue 8 6 COFFEE GLASS
+cup[2]: blue 24 12 COFFEE PLASTIC
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: purple 100 100 WATER PAPER
+cup[5]: blue 12 12 TEA PAPER
+cup[6]: green 8 7 MILK GLASS
+cup[7]: orange 16 1 MILK PLASTIC
+cup[8]: red 16 12 TEA PAPER
+cup[9]: fushia 2 1 COFFEE GLASS
+cup[10]: pink 32 0 WATER PAPER
+print_cup(find_fullest(cups_p, count)): purple 100 100 WATER PAPER
+
+cups_m[] values, each element points to a cup on the heap
+cup[0]: red 12 12 TEA PAPER
+cup[1]: blue 8 6 COFFEE GLASS
+cup[2]: blue 24 12 COFFEE PLASTIC
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: purple 100 100 WATER PAPER
+cup[5]: blue 12 12 TEA PAPER
+cup[6]: green 8 7 MILK GLASS
+cup[7]: orange 16 1 MILK PLASTIC
+cup[8]: red 16 12 TEA PAPER
+cup[9]: fushia 2 1 COFFEE GLASS
+cup[10]: pink 32 0 WATER PAPER
+
+sorted version of cups_p
+cup[0]: pink 32 0 WATER PAPER
+cup[1]: orange 16 1 MILK PLASTIC
+cup[2]: fushia 2 1 COFFEE GLASS
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: blue 24 12 COFFEE PLASTIC
+cup[5]: blue 8 6 COFFEE GLASS
+cup[6]: red 16 12 TEA PAPER
+cup[7]: green 8 7 MILK GLASS
+cup[8]: red 12 12 TEA PAPER
+cup[9]: blue 12 12 TEA PAPER
+cup[10]: purple 100 100 WATER PAPER
+
+sorted version of cups_m
+cup[0]: pink 32 0 WATER PAPER
+cup[1]: orange 16 1 MILK PLASTIC
+cup[2]: fushia 2 1 COFFEE GLASS
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: blue 24 12 COFFEE PLASTIC
+cup[5]: blue 8 6 COFFEE GLASS
+cup[6]: red 16 12 TEA PAPER
+cup[7]: green 8 7 MILK GLASS
+cup[8]: red 12 12 TEA PAPER
+cup[9]: blue 12 12 TEA PAPER
+cup[10]: purple 100 100 WATER PAPER
+
+reprint cups_p after changing cups[4].cur_oz = 0
+cup[0]: pink 32 0 WATER PAPER
+cup[1]: orange 16 1 MILK PLASTIC
+cup[2]: fushia 2 1 COFFEE GLASS
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: blue 24 12 COFFEE PLASTIC
+cup[5]: blue 8 6 COFFEE GLASS
+cup[6]: red 16 12 TEA PAPER
+cup[7]: green 8 7 MILK GLASS
+cup[8]: red 12 12 TEA PAPER
+cup[9]: blue 12 12 TEA PAPER
+cup[10]: purple 100 0 WATER PAPER
+
+reprint cups_m after changing cups[4].cur_oz = 0
+cup[0]: pink 32 0 WATER PAPER
+cup[1]: orange 16 1 MILK PLASTIC
+cup[2]: fushia 2 1 COFFEE GLASS
+cup[3]: orange 8 4 MILK PLASTIC
+cup[4]: blue 24 12 COFFEE PLASTIC
+cup[5]: blue 8 6 COFFEE GLASS
+cup[6]: red 16 12 TEA PAPER
+cup[7]: green 8 7 MILK GLASS
+cup[8]: red 12 12 TEA PAPER
+cup[9]: blue 12 12 TEA PAPER
+cup[10]: purple 100 100 WATER PAPER

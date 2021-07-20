@@ -1,0 +1,4 @@
+Parts in Database
+Part - Name: screw, Number: 123 Cost: $0.50
+Part - Name: bolt, Number: 124 Cost: $1.35
+Part - Name: pulley, Number: 145 Cost: $3.10
