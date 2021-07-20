@@ -1,6 +1,6 @@
 ## CPSC 305 Modules
 
-This directory contains the PDF documents for our course modules and related subdirectories.
+This directory contains the source code that is referenced in the PDF documents for our course modules. The PDF documents are not on GitHub. The PDF documents are on Canvas > Files > modules
 
 * SyllabusCourseOverview.pdf - contains our syllabus and a brief overview of our course.
 * ModuleC.pdf - contains readings and labs for our C module
