@@ -63,7 +63,7 @@ void pipeline() {
         else
             sprintf(instresult, "0x%08x: %s", address, disassemble(inst));
         if (branch) { // branch displays both paths of branch
-            char branresult[100];
+            char branresult[128];
             system_bus(baddress, &inst, READ);
             if (verbose_cpu)
                 sprintf(branresult, "%s  0x%08x: 0x%08x: %s", instresult, baddress, inst, disassemble(inst));
