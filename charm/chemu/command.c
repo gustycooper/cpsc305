@@ -220,6 +220,14 @@ int do_cmd(int argc, char **cmdargv) {
                     sprintf(result, "branch to self:");
                     addresult(result);
                 }
+                else if (finished == 3) {
+                    sprintf(result, "<<< *** >>>");
+                    addresult(result);
+                    sprintf(result, "waiting on input from scanf:");
+                    addresult(result);
+                    sprintf(result, "<<< *** >>>");
+                    addresult(result);
+                }
                 else if (finished < 0) {
                     sprintf(result, "Illegal instruction:");
                     addresult(result);

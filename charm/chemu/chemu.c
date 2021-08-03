@@ -14,8 +14,9 @@ TODO 1. Create displayw(int w, char *fmt, ...) to replace
 TODO 2. Use color to show changes in regs after each step
      3. Mark the PC on Instructions with color - done
      4. Process delete key in commands window - done
-TODO 5. Process up / down arrows in commands window - started
-TODO 6. Create a scrollable results window.
+     5. Process up / down arrows in commands window - done
+     6. Create a scrollable results window - done
+TODO 7. Change prompt to indicated waiting and scanf
  */
 
 //#define NCURSES 1
@@ -43,9 +44,10 @@ TODO 6. Create a scrollable results window.
 #define RESLIN 16
 #define RESCOL 60
 
+// Externs from cpu.c used in the register window
+// These could be retrieved via getters
 extern int registers[16];
 extern int cpsr;
-extern char memory[];
 extern char mem_changed[80];
 
 /***** Register Window *****/
@@ -266,45 +268,7 @@ void printreswin() {
 #endif
 
 
-/******************************************************************
- ***********************  CHEMU IOI *******************************
- ******************************************************************/
-int doscanf = 0;
-void chemuioi(int op2) {
-    //printf("chemuioi: addr: %d, %p\n", registers[1], &memory[registers[1]]);
-    //printf("%x\n", (unsigned int)memory[registers[1]]);
-    //printf("%s\n", &memory[registers[1]]);
-    //printf("\n");
-    if (op2 == 0x10 || op2 == 0x11) { // scanf or printf
-        char *p = &memory[registers[1]];
-        int perc = 0; // count % chars in format string
-        for (int i = 0; i < 80; i++) {
-            if (*p++ == '%')
-                perc++;
-        }
-        if (perc > 2)
-            perc = 2; // max of two format chars
-        char temp[80];
-        if (op2 == 0x11) { // printf
-          switch (perc) {
-            case 0:
-              strncpy(temp, &memory[registers[1]], 80);
-              break;
-            case 1:
-              snprintf(temp, 80, &memory[registers[1]], registers[2]);
-              break;
-            case 2:
-              snprintf(temp, 80, &memory[registers[1]], registers[2], registers[3]);
-              break;
-          }
-        addresult(temp);
-        }
-        else { // scanf
-            doscanf = 1;
-        }
-   }
-}
-
+extern int doscanf;
 
 int cmdgetstr(char **ps, char *es, char **str);
 #define MAXARGS 10
@@ -477,14 +441,7 @@ int main(int argc, char **argv) {
         strcpy(command_copy, command);
 #endif
         if (doscanf) {
-            char buffer[80];
-            snprintf(buffer, 80, "Doing scanf!");
-            addresult(buffer);
-            strncpy(buffer, command, 80);
-            addresult(buffer);
-            strncpy(buffer, "GUSTY", 80);
-            addresult(buffer);
-            doscanf = 0;
+            chemuscanf(command);
             goto skipcommand;
         }
         char *s = command;

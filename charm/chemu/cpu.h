@@ -40,3 +40,4 @@ void step_show_reg();
 void step_show_reg_mem();
 void pipeline();
 void show_mem_changed();
+void chemuscanf(char *str);

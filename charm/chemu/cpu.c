@@ -9,7 +9,8 @@
 #include "cpu.h"
 #include "isa.h"
 
-extern void chemuioi(int);
+extern char memory[];
+void addresult(char *res);
 
 /******************************************************************
  ***************************  EXECUTE  ****************************
@@ -115,6 +116,97 @@ int get_rupt() {
 }
 
 /******************************************************************
+ ***********************  CHEMU IOI *******************************
+ ******************************************************************
+ *
+ * User Mode initiates a printf via ker 0x11 and scanf via ker 0x10
+ * The 0x10 and 0x11 are passed to kernel in r0.
+ * Prior to issuing the ker 0x10/0x11, a user places a fmt string in
+ * r1. For each %fmt in the fmt string, the uses places a matching
+ * parameter in r2 and r3.
+ * The ker instruction traps to the OS. The OS address is placed in the
+ * interrupt vector table, which is located at address 0x7ff0.
+ * The OS issues a kernel mode ioi insruction to perform the scanf/printf.
+ * The ioi operand is 0x10 for scanf and 0x11 for printf.
+ * Register values when chemuioi occurs are the following.
+ * r0 - contains 0x10 or 0x11
+ * r1 - contains the format string
+ * r2 - conaints value to match first %fmt
+ * r3 - contains value to match second %fmt
+ */
+void byteswap(int *p) {
+    char b0 = *p         & 0xff;
+    char b1 = (*p >> 8)  & 0xff;
+    char b2 = (*p >> 16) & 0xff;
+    char b3 = (*p >> 24) & 0xff;
+    *p = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+}
+int doscanf = 0, scanfdone = 0;
+static int perc; // the number of % in fmt string
+// chemu is big endian, laptops are little endian
+// After scanf(%d), must byteswap. percd[] tracks %d
+static int percd[2]; // a 1 indicates %d
+// cheumscanf called from main() in chemu.c to apply scanf to str.
+// char *str points the the user's input
+void chemuscanf(char *str) {
+    //char temp[80];
+    //snprintf(temp, 80, "%s %d %d\n", str, perc, percd[0]);
+    //addresult(temp);
+    if (perc == 1) {
+        sscanf(str, &memory[registers[1]], &memory[registers[2]]);
+        if (percd[0]) // must byteswap
+            byteswap((int *)&memory[registers[2]]);
+    }
+    else if (perc == 2) {
+        sscanf(str, &memory[registers[1]], &memory[registers[2]], &memory[registers[3]]);
+        if (percd[0]) // must byteswap
+            byteswap((int *)&memory[registers[2]]);
+        if (percd[1]) // must byteswap
+            byteswap((int *)&memory[registers[3]]);
+    }
+    doscanf = 0;
+    scanfdone = 1;
+
+}
+
+void chemuioi(int op2) {
+    percd[0] = 0;
+    percd[1] = 0;
+    if (op2 == 0x10 || op2 == 0x11) { // scanf or printf
+        char *p = &memory[registers[1]];
+        perc = 0; // count % chars in format string
+        for (int i = 0; i < 80; i++) {
+            if (*p == 0)
+                break;
+            if (*p++ == '%')
+                perc++;
+                if (*p == 'd') // %d
+                    percd[perc-1] = 1;
+        }
+        if (perc > 2)
+            perc = 2; // max of two format chars
+        char temp[80];
+        if (op2 == 0x11) { // printf
+            switch (perc) {
+              case 0:
+                strncpy(temp, &memory[registers[1]], 80);
+                break;
+              case 1:
+                snprintf(temp, 80, &memory[registers[1]], registers[2]);
+                break;
+              case 2:
+                snprintf(temp, 80, &memory[registers[1]], registers[2], registers[3]);
+                break;
+            }
+            addresult(temp);
+        }
+        else { // scanf
+            doscanf = 1;
+        }
+   }
+}
+
+/******************************************************************
  ************************  BREAKPOINT *****************************
  ******************************************************************/
 // TODO - add more breakpoints #define NUM_BREAKPOINTS 2
@@ -130,6 +222,7 @@ static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
  ** step() does fetch, decode, execute for one instruction       **
  ** return 0 normal                                              **
  ** return 1 when breakpoint is hit                              **
+ ** return 2 when waiting on user input for scanf                **
  ** return -1 for illegal instruction                            **
  ******************************************************************/
 int step() {
@@ -478,10 +571,19 @@ int step() {
                }
                break;
            case 2: // 0xb2 - ioi, input output instruction
-               if (!bit_test(cpsr, U)) { // 0xb2 must be done in kernel mode
-                   //printf("Good use of ioi instruction\n");
-                   chemuioi(d->immediate20);
-                   pc += 4;
+               // 0xb2 must be done in kernel mode with the OS loaded
+               if (!bit_test(cpsr, U) && bit_test(cpsr, OS)) {
+                   if (scanfdone) {
+                       pc += 4;
+                       scanfdone = 0;
+                   }
+                   else {
+                       chemuioi(d->immediate20);
+                       if (doscanf)
+                           return 2;
+                       else
+                           pc += 4;
+                   }
                }
                else {
                    printf("Illegal use of ioi Instruction\n");
@@ -504,6 +606,7 @@ int step() {
 //  0 steps all steps
 //  1 breakpoint
 //  2 bal to itself
+//  3 waiting on input from scanf
 /******************************************************************
  ***************************  STEP_N  *****************************
  ** step_n() calls step() n times                                **
@@ -520,6 +623,8 @@ int step_n(int n) {
         s = step();
         if (s == 1) // 1 means a breakpoint is hit
             return 1;
+        else if (s == 2) // 2 means waiting on input from scanf
+            return 3;
         else if (s < 0)
             return -1;
         if (registers[15] == pc)
