@@ -178,10 +178,11 @@ void chemuioi(int op2) {
         for (int i = 0; i < 80; i++) {
             if (*p == 0)
                 break;
-            if (*p++ == '%')
+            if (*p++ == '%') {
                 perc++;
                 if (*p == 'd') // %d
                     percd[perc-1] = 1;
+            }
         }
         if (perc > 2)
             perc = 2; // max of two format chars
