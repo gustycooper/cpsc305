@@ -153,15 +153,22 @@ static void gen_addr(Node *node) {
     if (node->ty->kind == TY_FUNC) {
       if (node->var->is_definition)
         //println("  lea %s(%%rip), %%rax", node->var->name);
-        println("  mva r7, %s", node->var->name);
-      else
-        println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mva r7, %s   // addr of func %s", node->var->name, node->var->name);
+      else {
+        if (strcmp(node->var->name, "printf") == 0)
+          println("  mva r7, 0x7000   // addr of func printf");
+        else if (strcmp(node->var->name, "scanf") == 0)
+          println("  mva r7, 0x7050   // addr of func scanf");
+        else
+          println("  // external function %s\n", node->var->name);
+        //println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+      }
       return;
     }
 
     // Global variable
     println("  // global variable: %s", node->var->name); // GUSTY
-    println("  mva r7, %s // addr of %s to r7", node->var->name, node->var->name); // GUSTY
+    println("  mva r7, %s  // addr of %s to r7", node->var->name, node->var->name); // GUSTY
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -172,7 +179,8 @@ static void gen_addr(Node *node) {
     return;
   case ND_MEMBER:
     gen_addr(node->lhs);
-    println("  add $%d, %%rax", node->member->offset);
+    println("  adi r7, r7, #%d // add member offset", node->member->offset); // GUSTY
+    //println("  add $%d, %%rax", node->member->offset);
     return;
   case ND_FUNCALL:
     if (node->ret_buffer) {
@@ -330,7 +338,8 @@ static char i32u8[] = "movzbl %al, %eax";
 static char i32i16[] = "movswl %ax, %eax";
 static char i32u16[] = "movzwl %ax, %eax";
 static char i32f32[] = "cvtsi2ssl %eax, %xmm0";
-static char i32i64[] = "movsxd %eax, %rax";
+static char i32i64[] = "// cast i32 to i64";
+//static char i32i64[] = "movsxd %eax, %rax";
 static char i32f64[] = "cvtsi2sdl %eax, %xmm0";
 static char i32f80[] = "mov %eax, -4(%rsp); fildl -4(%rsp)";
 
@@ -1453,11 +1462,26 @@ static void emit_data(Obj *prog) {
 
       println("// .type %s, @object", var->name);
       println("// .size %s, %d", var->name, var->ty->size);
+      println("// .kind %s, %d", var->name, var->ty->kind);
+      if (var->tok)
+        println("// .tokkind %s, %d", var->name, var->tok->kind);
       println("// .align %d", align);
+      println("// .varalign %d", var->align);
       if (var->name[0] == '.')
         println("// .label %s", var->name);
       else
         println(".label %s", var->name);
+
+      //println("Gusty: var->ty->size: %d\n", var->ty->size);
+
+/*
+The following code is somewhat of a mess.
+- chemu is big endian for int
+- chemu uses calls linux printf for its internal printf
+- This causes chemu to use strings stored in little endian
+- I use the var->align == 1 to determine a string
+- Strings are output in little endian
+ */
 
       Relocation *rel = var->rel;
       int pos = 0;
@@ -1468,14 +1492,34 @@ static void emit_data(Obj *prog) {
           rel = rel->next;
           pos += 8;
         } else {
-          value = value | var->init_data[pos++];
+/*
+The next two println calls are helpful to see the byte values
+ */
+          //println("  .byte %d", var->init_data[pos]);
+          //println("  .byte %x", var->init_data[pos] & 0xff);
+          int shft = (pos % 4) * 8;
+          int dataval = var->init_data[pos++] & 0xff;
+          if (var->align == 1)
+            value = (value << 8) | dataval;
+          else
+            value = value | (dataval << shft);
+	  if ((pos % 4) == 0) {
+            println("  0x%x", value);
+	    value = 0;
+	  }
           //println("  .byte %d", var->init_data[pos++]);
         }
       }
+      if (var->ty->size % 4)  {// size is not a multiple of 4 (like string lit)
+        // pad to be a multiple of 4
+        for (int i = 0; i < (4 - var->ty->size % 4); i++)
+          value = (value << 8) | 0;
+        println("  0x%x", value);
+      }
       if (var->name[0] == '.')
         println("// %d", value);
-      else
-        println("  %d", value);
+      //else
+      //  println("  %d", value);
       continue;
     }
 

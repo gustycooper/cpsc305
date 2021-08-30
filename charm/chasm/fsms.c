@@ -65,7 +65,7 @@ enum idstates idtrans[10][4] =
 int idchartolet(char c) {
     if (c >= 'a' && c <= 'z')
         return idlets;
-    else if ((c >= '0' && c < '9') || c == '_')
+    else if ((c >= '0' && c <= '9') || c == '_')
         return idnums;
     else if (c == '\0')
         return idbackzero;

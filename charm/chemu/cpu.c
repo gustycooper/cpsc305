@@ -169,6 +169,8 @@ void chemuscanf(char *str) {
 
 }
 
+// TODO - for printf("%s" ), must pass &memory[registers[1]]
+// The address in registers[1] is a local chemu address
 void chemuioi(int op2) {
     percd[0] = 0;
     percd[1] = 0;
