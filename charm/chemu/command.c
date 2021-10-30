@@ -367,6 +367,14 @@ int do_cmd(int argc, char **cmdargv) {
               }
           }
       } 
+    } else if (cmdargv[0][0] == '0' && cmdargv[0][1] == 'x' ) {
+        int val = (int)strtol(&cmdargv[0][2], NULL, 16);
+        sprintf(result, "decimal: %d", val);
+        addresult(result);
+    } else if (cmdargv[0][0] == '0' && cmdargv[0][1] == 'd' ) {
+        int val = (int)strtol(&cmdargv[0][2], NULL, 10);
+        sprintf(result, "hex: 0x%x", val);
+        addresult(result);
     } else if (cmdargv[0][0] == 'y') { // show symbols
         dictshow();
     } else if (cmdargv[0][0] == '.') {
@@ -392,7 +400,8 @@ int do_cmd(int argc, char **cmdargv) {
 }
 
 void do_script(char *scriptfilename) {
-    printf("< redirect from script. file: %s\n", scriptfilename);
+    sprintf(result, "< redirect from script. file: %s\n", scriptfilename);
+    addresult(result);
     cmdargv[0] = ""; // prevent seg fault when first cmd is empty line
     FILE *fp = fopen(scriptfilename, "r");
     if (fp != NULL) {

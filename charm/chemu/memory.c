@@ -5,6 +5,8 @@
 #include "cpu.h"
 #include "dict.h"
 
+// TODO 1. Update memory[MAX_MEM] to use a #define
+// TODO 2. Update memory access functions to ensure address < MAX_MEM
 
 unsigned char memory[32*1024]; // 32K bytes
 
@@ -116,7 +118,7 @@ void load_memory(char *filename) {
             int value;
             sscanf(buf, "%s %d", symbol, &value);
             dictput(symbol, value);
-            printf("%s %d\n", symbol, value);
+            // printf("%s %d\n", symbol, value);
         }
         else { // number
             if (buf[0] == '0' && buf[1] =='x') {

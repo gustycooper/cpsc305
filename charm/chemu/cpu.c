@@ -342,7 +342,7 @@ int step() {
               registers[d->rd] = registers[d->rm] * registers[d->rn];
               break;
           case 3:
-              registers[d->rd] = registers[d->rm] / registers[d->rn];
+              registers[d->rd] = registers[d->rm] / registers[d->rn]; // TODO check that divisor is 0
               break;
           case 4:
               registers[d->rd] = registers[d->rm] & registers[d->rn];
