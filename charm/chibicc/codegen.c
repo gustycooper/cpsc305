@@ -1159,7 +1159,7 @@ static void gen_expr(Node *node) {
     println("  add %s, %s, %s", ax, di, ax); // GUSTY
     return;
   case ND_SUB:
-    println("  sub %s, %s, %s", ax, di, ax); // GUSTY
+    println("  sub %s, %s, %s", ax, ax, di); // GUSTY
     return;
   case ND_MUL:
     println("  mul %s, %s, %s", ax, di, ax); // GUSTY
@@ -1588,7 +1588,7 @@ static void emit_text(Obj *prog) {
       continue;
 
     if (dot_text) {
-      println(".text 0x200");
+      println(".text 0x700");
       dot_text = 0;
     }
     if (fn->is_static)
