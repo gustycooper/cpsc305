@@ -65,7 +65,7 @@ char *toks_t_str[] = { "data", "text", "label", "string", "inst", "comment",
 
 #define MAX_LINE 100        // maximum length of asm prog line
 #define MAX_TOKENS 15       // maximum number of tokens on asm program line
-#define MAX_PROG_LINES 1000 // maximum number of lines in an asm program
+#define MAX_PROG_LINES 2000 // maximum number of lines in an asm program
 
 static char buf[MAX_LINE];              // lines from .chasm file read into buf
 static char tokbuf[MAX_LINE*2];         // buf for line with whitespace around , [ and ]
