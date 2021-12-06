@@ -17,6 +17,7 @@ void addresult(char *res);
 char result[80]; // used to add a result to ncurses result window
 
 extern int verbose_cpu;
+extern int total_steps;
 /*
  Commands - numbers are decimal or hex, which have a 0x.
  Users are responsible for address boundaries - l 0x105 should be l 0x104
@@ -50,9 +51,12 @@ extern int verbose_cpu;
           - N=-1, negative random number between 0 and 100
           - N=-2, negative random number between 0 and 200
  q - quit
+ y - show symbols and their addresses
  v - Turn verbose off (off by default)
    - v anything - Turn verbose on
    - v by itselft - Turn verbose off
+ 0xf - show Decimal 15
+ 0d15 - show Hex 0xf
  pl - show pipeline in Instructions window
  cp 500 abc - copy abc to address 500, null terminated
  ld file.o - load file.o into memory
@@ -203,11 +207,14 @@ int do_cmd(int argc, char **cmdargv) {
 #endif
             addresult(result);
         }
+    } else if (cmdargv[0][0] == 's' && cmdargv[0][1] == 't') {
+            sprintf(result, "Total Steps: %d", total_steps);
+            addresult(result);
     } else if (cmdargv[0][0] == 's') {
         if (argc == 2) { // format is s num
             int steps = number(cmdargv[1]);
-            if (steps == -1 || steps > 900) {
-                sprintf(result, "%d: %s", steps, "invalid number of steps on s command - 900 max.");
+            if (steps == -1 || steps > 30000) {
+                sprintf(result, "%d: %s", steps, "invalid number of steps on s command - 30000 max.");
                 addresult(result);
             }
             else {

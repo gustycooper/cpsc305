@@ -13,6 +13,12 @@ extern char memory[];
 void addresult(char *res);
 
 /******************************************************************
+ ***************************   STEPS   ****************************
+ ** global total_steps - counts the num of instructions executed **
+ ******************************************************************/
+int total_steps = 0;
+
+/******************************************************************
  ***************************  EXECUTE  ****************************
  ** global verbose_cpu - main() changes this via v command       **
  ******************************************************************/
@@ -93,6 +99,8 @@ void pipeline() {
  ******************************************************************/
 void set_reg(int reg, int value) {
     registers[reg] =  value;
+    if (reg == 15)
+        total_steps = 0;
 }
 
 int get_reg(int reg) {
@@ -146,6 +154,7 @@ static int perc; // the number of % in fmt string
 // chemu is big endian, laptops are little endian
 // After scanf(%d), must byteswap. percd[] tracks %d
 static int percd[2]; // a 1 indicates %d
+static int percs[2]; // a 1 indicates %s
 // cheumscanf called from main() in chemu.c to apply scanf to str.
 // char *str points the the user's input
 void chemuscanf(char *str) {
@@ -174,6 +183,8 @@ void chemuscanf(char *str) {
 void chemuioi(int op2) {
     percd[0] = 0;
     percd[1] = 0;
+    percs[0] = 0;
+    percs[1] = 0;
     if (op2 == 0x10 || op2 == 0x11) { // scanf or printf
         char *p = &memory[registers[1]];
         perc = 0; // count % chars in format string
@@ -184,6 +195,8 @@ void chemuioi(int op2) {
                 perc++;
                 if (*p == 'd') // %d
                     percd[perc-1] = 1;
+                else if (*p == 's')
+                    percs[perc-1] = 1;
             }
         }
         if (perc > 2)
@@ -195,10 +208,20 @@ void chemuioi(int op2) {
                 strncpy(temp, &memory[registers[1]], 80);
                 break;
               case 1:
-                snprintf(temp, 80, &memory[registers[1]], registers[2]);
+                if (percd[0] == 1)
+                    snprintf(temp, 80, &memory[registers[1]], registers[2]);
+                else
+                    snprintf(temp, 80, &memory[registers[1]], &memory[registers[2]]);
                 break;
               case 2:
-                snprintf(temp, 80, &memory[registers[1]], registers[2], registers[3]);
+                if (percd[0] == 1 && percd[1] == 1) // two %d
+                    snprintf(temp, 80, &memory[registers[1]], registers[2], registers[3]);
+                else if (percd[0] == 1 && percs[1] == 1) // %d %s
+                    snprintf(temp, 80, &memory[registers[1]], registers[2], &memory[registers[3]]);
+                else if (percd[1] == 1 && percs[0] == 1) // %s %d
+                    snprintf(temp, 80, &memory[registers[1]], &memory[registers[2]], registers[3]);
+                else // %s %s
+                    snprintf(temp, 80, &memory[registers[1]], &memory[registers[2]], &memory[registers[3]]);
                 break;
             }
             addresult(temp);
@@ -229,6 +252,7 @@ static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
  ** return -1 for illegal instruction                            **
  ******************************************************************/
 int step() {
+    total_steps++;
     memaddr_changed = 0; // state of changed memory
 /******************************************************************
  ****************************  FETCH  *****************************
