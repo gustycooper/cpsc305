@@ -31,4 +31,31 @@ int main(int argc, char **argv) {
         printf("%2d +  %2d: %2d, 0x%08x\n", x, y, x + y, x + y);
         i++;
     }
+/*
+Add 11 printf statements that print the answers to each of the following questions
+about expressions. Compute the answer using your brain, and print the answer in 
+decimal and hex as follows, which prints an answer that is 20.
+
+printf("1. %d, 0x%x\n", 20, 20)
+
+If you need help determining the answer, use C. For example,
+
+    printf("1. %d, 0x%x\n", 0xaa | 0x55, 0xaa | 0x55);
+
+But please study the answer until you understand the expression.
+
+1. What is the value of 0xaa | 0x55?
+2. What is the value of 0xaa & 0x55?
+3. What is the value of 0xff000000 | 0x12345678?
+4. What is the value of 0xff000000 & 0x12345678?
+5. What is the value of 5 < 1?
+6. What is the value of 5 << 1?
+7. What is the value of 4 > 1?
+8. What is the value of 4 >> 1?
+9. What is the value of 5 / 2?
+10. What is the value of 0xaa ^ 0x55?
+11. What is the value of 0xa ^ 10?
+
+ */
+
 }

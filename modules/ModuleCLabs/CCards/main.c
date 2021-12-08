@@ -45,4 +45,12 @@ int main(int argc, char **argv) {
     printf("Rest of deck after draw:\n");
     printRestOfDeck(shuffled);
 
+    printf("Some more Unicode characters\n\n");
+    setlocale(LC_ALL, ""); //set up unicode printing
+    int lets[] = { 0x461, 0x488, 0x489, 0x4ea, 0x4ec, 0x58d, 0x2ee3, 0x2ee4, 0x0 };
+    for (int i = 0; i < sizeof(lets)/sizeof(int); i++)
+        printf("%lc ", lets[i]);
+    printf("\n");
+    printf("%ls\n\n", lets);
+
 }
