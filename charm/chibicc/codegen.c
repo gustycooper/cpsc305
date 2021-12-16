@@ -1,17 +1,118 @@
 #include "chibicc.h"
 
-#define GP_MAX 6
+/*
+Charm Data Types - Approach for data types.
+char - implement 
+short - same as int
+int - implement
+float - implement
+double - same as float
+long double - same as float
+
+Unitialized static data is allocated values in the .s output as if they are initialized.
+Future - create a .bss section for unitialized data (maybe).
+
+TODO - Update so that double literals and variables are treated as float
+This involves reaching into the parser. For example
+
+float f = 1.125;
+.label f
+  0x3f900000
+double d = 1.125;
+.label d
+  0x0          <- I think these are backwards
+  0x3ff20000
+
+Currently chasm only implements 32-bits for static data
+TODO - (Maybe) Add to chasm the ability for have a .byte where numbers are allocated one byte
+The following allocates 3 bytes and a hole in front of the .data
+.byte // subsequent numbers are allocated one byte
+.label a
+5
+.label b
+6
+.label c
+7
+.data // subsequent numbers are allocated four bytes
+.label i
+23
+
+NOTE: Currently for chibicc, when there are two static char.
+char a = 'G';
+char b = 34;
+chibicc allocates 32-bits for each variable.
+.label b
+0x22000000
+.label c
+0x47000000
+This may be just fine.
+ */
+
+/* TODO
+I have to study how chibbicc allocates the offsets for variables.
+Local variables have a negative offset, i.e., var->off is negative.
+These are offsets from the frame pointer. See below for diagram of how it works.
+On Intel esp (stack pointer) and ebp (frame (or base) pointer).
+I need to correctly implement fp and sp. Need some more study
+I use positive offsets from the frame pointer, so I use -var->off.
+This works for now; however, I have had to fiddle with the stack_size and REG_SPACE
+With more study, I can better implement the stack for functions. 
+I am overallocating space for the stack.
+Sample code and variable offsets
+
+int add_me(int i, int j) {
+    int x = 5;
+
+The offsets for i and j are 20 and 24
+The offset for x is 4
+
+Somehow the following define is used in stack allocation
+#define REG_SPACE 9*4
+
+       +----------------+
+sp->   |                |
+       +----------------+
+       |                |
+       +----------------+
+       |                | local var a has offset -8 from fp
+       +----------------+
+       |                |
+       +----------------+
+fp->   |                |
+       +----------------+
+       |                | param v passed on stack has offset 4 from fp
+       +----------------+
+       |                |
+       +----------------+
+
+ */
+
+/*
+Registers
+r13 - stack pointer
+r12 - frame pointer
+r7 - original rax reg
+r6 - original rdi reg
+r8 - original rdx reg
+r10 - used for function calls
+    - addr of func put in r10, then blr [r10]
+ */
+
+// Verbose flag - 1 gets comments in the .s
+// TODO - implement verbose
+int V = 0;
+
+// Define max args that are passed in regs
+// More than these are passed on stack
+// TODO - fix use of regs are aguments
+#define GP_MAX 4
 #define FP_MAX 8
 
 static FILE *output_file;
 static int depth;
-/* The arrays argreg8, argreg16, argreg32, and argreg64 are not used for Charm
-   See below for where they were used.
+/* Arrays to lookup regs used to pass arguments
+   The arrays argreg8, argreg16, argreg32, and argreg64 are not used for Charm
    argreg64 is still in the code, but that code will be updated in the future
-static char *argreg8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
-static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
-static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
-static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 */
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 static char *argregcharm[] = {"r0", "r1", "r2", "r3", "r5", "r6"}; // GUSTY
@@ -43,20 +144,19 @@ static void push(void) {
 }
 
 static void pop(char *arg) {
-  //println("  pop %s", arg);
   println("  ldr %s, [r13], #4   // pop top of stack into %s", arg, arg); // GUSTY
   depth--;
 }
 
 static void pushf(void) {
-  println("  sub $8, %%rsp");
-  println("  movsd %%xmm0, (%%rsp)");
+  println("  // push floating point - works for float, not double");
+  println("  str r7, [r13, #-4]! // push r7 on stack"); // GUSTY
   depth++;
 }
 
 static void popf(int reg) {
-  println("  movsd (%%rsp), %%xmm%d", reg);
-  println("  add $8, %%rsp");
+  println("  // pop floating point - works for float, not double");
+  println("  ldr r%d, [r13], #4   // pop top of stack into r%d", reg, reg); // GUSTY
   depth--;
 }
 
@@ -99,8 +199,8 @@ static void gen_addr(Node *node) {
 
     // Local variable
     if (node->var->is_local) {
-      println("  // local variable %s, offset: %d", node->var->name, -node->var->offset); // GUSTY
-      println("  adi r7, r12, #%d    // addr of %s to r7", -node->var->offset, node->var->name); // GUSTY
+      if (V) println("  // local variable %s, offset: %d", node->var->name, -node->var->offset); // GUSTY
+      println("  adi r7, r12, #%d     // addr of %s to r7", -node->var->offset, node->var->name); // GUSTY
       return;
     }
 
@@ -180,7 +280,6 @@ static void gen_addr(Node *node) {
   case ND_MEMBER:
     gen_addr(node->lhs);
     println("  adi r7, r7, #%d // add member offset", node->member->offset); // GUSTY
-    //println("  add $%d, %%rax", node->member->offset);
     return;
   case ND_FUNCALL:
     if (node->ret_buffer) {
@@ -203,8 +302,7 @@ static void gen_addr(Node *node) {
   error_tok(node->tok, "not an lvalue");
 }
 
-// Load a value from where %rax is pointing to.
-// Load a value into r4 where r7 is pointing to. // GUSTY - only for size == 4
+// Load a value into r7 where r7 is pointing to. // GUSTY - only for size == 4
 static void load(Type *ty) {
   switch (ty->kind) {
   case TY_ARRAY:
@@ -220,17 +318,15 @@ static void load(Type *ty) {
     // the first element of the array in C" occurs.
     return;
   case TY_FLOAT:
-    println("  movss (%%rax), %%xmm0");
+    println("  ldr r7, [r7] // float, good"); // GUSTY
     return;
   case TY_DOUBLE:
-    println("  movsd (%%rax), %%xmm0");
+    println("  ldr r7, [r7] // double, like float"); // GUSTY
     return;
   case TY_LDOUBLE:
-    println("  fldt (%%rax)");
+    println("  ldr r7, [r7] // long double, like float"); // GUSTY
     return;
   }
-
-  char *insn = ty->is_unsigned ? "movz" : "movs";
 
   // When we load a char or a short value to a register, we always
   // extend them to the size of int, so we can assume the lower half of
@@ -238,15 +334,13 @@ static void load(Type *ty) {
   // register for char, short and int may contain garbage. When we load
   // a long value to a register, it simply occupies the entire register.
   if (ty->size == 1)
-    println("  %sbl (%%rax), %%eax", insn);
+    println("  ldb r7, [r7] // char, size == 1"); // GUSTY
   else if (ty->size == 2)
-    println("  %swl (%%rax), %%eax", insn);
+    println("  ldr r7, [r7] // short, size == 2, load 4 bytes"); // ty->size == 2, this loads 4 bytes
   else if (ty->size == 4)
-    println("  ldr r7, [r7]"); // GUSTY
-    //println("  movsxd (%%rax), %%rax");
+    println("  ldr r7, [r7] // int, size == 4"); // GUSTY
   else
-    println("  ldr r7, [r7]"); // GUSTY
-    //println("  mov (%%rax), %%rax");
+    println("  ldr r7, [r7]  // long, size == 8 "); // GUSTY
 }
 
 // Store %rax to an address that the stack top is pointing to.
@@ -261,26 +355,25 @@ static void store(Type *ty) {
   case TY_STRUCT:
   case TY_UNION:
     for (int i = 0; i < ty->size; i++) {
-      println("  mov %d(%%rax), %%r8b", i);
-      println("  mov %%r8b, %d(%%rdi)", i);
+      println("  stb r7, [r6], 1  // struct stores a byte at a time");
     }
     return;
   case TY_FLOAT:
-    println("  movss %%xmm0, (%%rdi)");
+    println("  str r7, [r6]");
     return;
   case TY_DOUBLE:
-    println("  movsd %%xmm0, (%%rdi)");
+    println("  str r7, [r6]");
     return;
   case TY_LDOUBLE:
-    println("  fstpt (%%rdi)");
+    println("  str r7, [r6]");
     return;
   }
 
 
   if (ty->size == 1)
-    println("  mov %%al, (%%rdi)");
+    println("  stb r7, [r6]"); // GUSTY
   else if (ty->size == 2)
-    println("  mov %%ax, (%%rdi)");
+    println("  str r7, [r6]"); // GUSTY
   else if (ty->size == 4)
     println("  str r7, [r6]"); // GUSTY
   else
@@ -290,17 +383,10 @@ static void store(Type *ty) {
 static void cmp_zero(Type *ty) {
   switch (ty->kind) {
   case TY_FLOAT:
-    println("  xorps %%xmm1, %%xmm1");
-    println("  ucomiss %%xmm1, %%xmm0");
-    return;
   case TY_DOUBLE:
-    println("  xorpd %%xmm1, %%xmm1");
-    println("  ucomisd %%xmm1, %%xmm0");
-    return;
   case TY_LDOUBLE:
-    println("  fldz");
-    println("  fucomip");
-    println("  fstp %%st(0)");
+    println("  mov r6, #0 // 0 is float 0.0");
+    println("  cmf r7, r6");
     return;
   }
 
@@ -310,8 +396,10 @@ static void cmp_zero(Type *ty) {
     println("  cmp r7, #0");
 }
 
+// The following enum is ordered to match indices in cast_table
 enum { I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, F80 };
 
+// Return one of the enum values defined above
 static int getTypeId(Type *ty) {
   switch (ty->kind) {
   case TY_CHAR:
@@ -332,73 +420,76 @@ static int getTypeId(Type *ty) {
   return U64;
 }
 
-// The table for type casts
+/* 
+The table for type casts - used to convert one primitive type to another. Samples
+int to float - This is i32f32, which is a valid conversion in Charm
+float to int - This is f32i32, which is a valid conversion in Charm
+
+Charm supports the types as defined in the first comment of this file.
+
+The value to be converted is in r7
+ */
 static char i32i8[] = "movsbl %al, %eax";
 static char i32u8[] = "movzbl %al, %eax";
 static char i32i16[] = "movswl %ax, %eax";
 static char i32u16[] = "movzwl %ax, %eax";
-static char i32f32[] = "cvtsi2ssl %eax, %xmm0";
-static char i32i64[] = "// cast i32 to i64";
-//static char i32i64[] = "movsxd %eax, %rax";
-static char i32f64[] = "cvtsi2sdl %eax, %xmm0";
-static char i32f80[] = "mov %eax, -4(%rsp); fildl -4(%rsp)";
+static char i32f32[] = "i2f r7, r7 // convert int to float";
+static char i32i64[] = "// convert int to double";
+static char i32f64[] = "i2f r7, r7 // convert int to double (float for Charm)";
+static char i32f80[] = "i2f r7, r7 // convert int to long double (float for Charm)";
 
-static char u32f32[] = "mov %eax, %eax; cvtsi2ssq %rax, %xmm0";
-static char u32i64[] = "mov %eax, %eax";
-static char u32f64[] = "mov %eax, %eax; cvtsi2sdq %rax, %xmm0";
-static char u32f80[] = "mov %eax, %eax; mov %rax, -8(%rsp); fildll -8(%rsp)";
+static char u32f32[] = "i2f r7, r7 // convert uint to float - not correct";
+static char u32i64[] = "// convert uint to double - not correct";
+static char u32f64[] = "i2f r7, r7 // convert uint to double (float for Charm) - not correct";
+static char u32f80[] = "i2f r7, r7 // convert uint to long double (float for Charm) - not correct";
 
-static char i64f32[] = "cvtsi2ssq %rax, %xmm0";
-static char i64f64[] = "cvtsi2sdq %rax, %xmm0";
-static char i64f80[] = "movq %rax, -8(%rsp); fildll -8(%rsp)";
+static char i64f32[] = "i2f r7, r7 // convert long to float";
+static char i64f64[] = "i2f r7, r7 // convert long to double";
+static char i64f80[] = "i2f r7, r7 // convert long to long double";
 
-static char u64f32[] = "cvtsi2ssq %rax, %xmm0";
-static char u64f64[] =
-  "test %rax,%rax; js 1f; pxor %xmm0,%xmm0; cvtsi2sd %rax,%xmm0; jmp 2f; "
-  "1: mov %rax,%rdi; and $1,%eax; pxor %xmm0,%xmm0; shr %rdi; "
-  "or %rax,%rdi; cvtsi2sd %rdi,%xmm0; addsd %xmm0,%xmm0; 2:";
-static char u64f80[] =
-  "mov %rax, -8(%rsp); fildq -8(%rsp); test %rax, %rax; jns 1f;"
-  "mov $1602224128, %eax; mov %eax, -4(%rsp); fadds -4(%rsp); 1:";
+static char u64f32[] = "i2f r7, r7 // convert ulong to float";
+static char u64f64[] = "i2f r7, r7 // convert ulong to double";
+static char u64f80[] = "i2f r7, r7 // convert ulong to long double";
+static char f32i8[] = "f2i r7, r7 // convert float to char"
+                       "\n  mov r6, #0xff"
+                       "\n  and r7, r7, r6";
+static char f32u8[] = "f2i r7, r7 // convert float to uchar"
+                       "\n  mov r6, #0xff"
+                       "\n  and r7, r7, r6";
+static char f32i16[] = "f2i r7, r7 // convert float to short";
+static char f32u16[] = "f2i r7, r7 // convert float to ushort";
+static char f32i32[] = "f2i r7, r7 // convert float to int";
+static char f32u32[] = "f2i r7, r7 // convert float to uint";
+static char f32i64[] = "f2i r7, r7 // convert float to long";
+static char f32u64[] = "f2i r7, r7 // convert float to ulong";
+static char f32f64[] = "// convert float to double";
+static char f32f80[] = "// convert float to long double";
 
-static char f32i8[] = "cvttss2sil %xmm0, %eax; movsbl %al, %eax";
-static char f32u8[] = "cvttss2sil %xmm0, %eax; movzbl %al, %eax";
-static char f32i16[] = "cvttss2sil %xmm0, %eax; movswl %ax, %eax";
-static char f32u16[] = "cvttss2sil %xmm0, %eax; movzwl %ax, %eax";
-static char f32i32[] = "cvttss2sil %xmm0, %eax";
-static char f32u32[] = "cvttss2siq %xmm0, %rax";
-static char f32i64[] = "cvttss2siq %xmm0, %rax";
-static char f32u64[] = "cvttss2siq %xmm0, %rax";
-static char f32f64[] = "cvtss2sd %xmm0, %xmm0";
-static char f32f80[] = "movss %xmm0, -4(%rsp); flds -4(%rsp)";
+static char f64i8[] = "f2i r7, r7 // convert double to char"
+                       "\n  mov r6, #0xff"
+                       "\n  and r7, r7, r6";
+static char f64u8[] = "f2i r7, r7 // convert double to uchar"
+                       "\n  mov r6, #0xff"
+                       "\n  and r7, r7, r6";
+static char f64i16[] = "f2i r7, r7 // convert double to short";
+static char f64u16[] = "f2i r7, r7 // convert double to ushort";
+static char f64i32[] = "f2i r7, r7 // convert double to int";
+static char f64u32[] = "f2i r7, r7 // convert double to uint";
+static char f64i64[] = "f2i r7, r7 // convert double to long";
+static char f64u64[] = "f2i r7, r7 // convert double to ulong";
+static char f64f32[] = "// convert double to float";
+static char f64f80[] = "// convert double to long double";
 
-static char f64i8[] = "cvttsd2sil %xmm0, %eax; movsbl %al, %eax";
-static char f64u8[] = "cvttsd2sil %xmm0, %eax; movzbl %al, %eax";
-static char f64i16[] = "cvttsd2sil %xmm0, %eax; movswl %ax, %eax";
-static char f64u16[] = "cvttsd2sil %xmm0, %eax; movzwl %ax, %eax";
-static char f64i32[] = "cvttsd2sil %xmm0, %eax";
-static char f64u32[] = "cvttsd2siq %xmm0, %rax";
-static char f64i64[] = "cvttsd2siq %xmm0, %rax";
-static char f64u64[] = "cvttsd2siq %xmm0, %rax";
-static char f64f32[] = "cvtsd2ss %xmm0, %xmm0";
-static char f64f80[] = "movsd %xmm0, -8(%rsp); fldl -8(%rsp)";
-
-#define FROM_F80_1                                           \
-  "fnstcw -10(%rsp); movzwl -10(%rsp), %eax; or $12, %ah; " \
-  "mov %ax, -12(%rsp); fldcw -12(%rsp); "
-
-#define FROM_F80_2 " -24(%rsp); fldcw -10(%rsp); "
-
-static char f80i8[] = FROM_F80_1 "fistps" FROM_F80_2 "movsbl -24(%rsp), %eax";
-static char f80u8[] = FROM_F80_1 "fistps" FROM_F80_2 "movzbl -24(%rsp), %eax";
-static char f80i16[] = FROM_F80_1 "fistps" FROM_F80_2 "movzbl -24(%rsp), %eax";
-static char f80u16[] = FROM_F80_1 "fistpl" FROM_F80_2 "movswl -24(%rsp), %eax";
-static char f80i32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
-static char f80u32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
-static char f80i64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
-static char f80u64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
-static char f80f32[] = "fstps -8(%rsp); movss -8(%rsp), %xmm0";
-static char f80f64[] = "fstpl -8(%rsp); movsd -8(%rsp), %xmm0";
+static char f80i8[] = "// convert long double to char";
+static char f80u8[] = "// convert long double to uchar";
+static char f80i16[] = "// convert long double to short";
+static char f80u16[] = "// convert long double to ushort";
+static char f80i32[] = "// convert long double to int";
+static char f80u32[] = "// convert long double to uint";
+static char f80i64[] = "// convert long double to long";
+static char f80u64[] = "// convert long double to ulong";
+static char f80f32[] = "// convert long double to float";
+static char f80f64[] = "// convert long double to double";
 
 static char *cast_table[][11] = {
   // i8   i16     i32     i64     u8     u16     u32     u64     f32     f64     f80
@@ -430,6 +521,7 @@ static void cast(Type *from, Type *to) {
 
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
+  //printf("GUSTY: cast(%d, %d)\n", t1, t2);
   if (cast_table[t1][t2])
     println("  %s", cast_table[t1][t2]);
 }
@@ -729,33 +821,33 @@ static void gen_expr(Node *node) {
     return;
   case ND_NUM: {
     switch (node->ty->kind) {
-    case TY_FLOAT: {
-      union { float f32; uint32_t u32; } u = { node->fval };
-      println("  mov $%u, %%eax  # float %Lf", u.u32, node->fval);
-      println("  movq %%rax, %%xmm0");
-      return;
-    }
-    case TY_DOUBLE: {
-      union { double f64; uint64_t u64; } u = { node->fval };
-      println("  mov $%llu, %%rax  # double %Lf", u.u64, node->fval);
-      println("  movq %%rax, %%xmm0");
-      return;
-    }
+    case TY_FLOAT: 
+    case TY_DOUBLE: 
     case TY_LDOUBLE: {
-      union { long double f80; uint64_t u64[2]; } u;
-      memset(&u, 0, sizeof(u));
-      u.f80 = node->fval;
-      println("  mov $%llu, %%rax  # long double %Lf", u.u64[0], node->fval);
-      println("  mov %%rax, -16(%%rsp)");
-      println("  mov $%llu, %%rax", u.u64[1]);
-      println("  mov %%rax, -8(%%rsp)");
-      println("  fldt -16(%%rsp)");
+      if (V) {
+        if (node->ty->kind == TY_DOUBLE) {
+          println("  // Charm does not support double");
+          println("  // double is treated as a float");
+        }
+        if (node->ty->kind == TY_LDOUBLE) {
+          println("  // Charm does not support long double");
+          println("  // long double is treated as a float");
+        }
+      }
+      union { float f32; uint32_t u32; } u = { node->fval };
+      int upper = u.u32 >> 16;
+      int lower = u.u32 & 0xffff;
+      println("  // 0x%x is float %Lf", u.u32, node->fval);
+      println("  mov r7, #0x%x  // upper of float %Lf", upper, node->fval);
+      println("  shf r7, #16");
+      println("  mov r6, #0x%x  // lower of float %Lf", lower, node->fval);
+      println("  orr r7, r7, r6  // put upper and lower together");
       return;
     }
     }
 
-    println("  // number: %lld", node->val); // GUSTY
-    println("  mov r7, #%lld", node->val); // GUSTY - I use r7 like rax in original code
+    if (V) println("  // number: %lld", node->val); // GUSTY
+    println("  mov r7, #%lld", node->val); // GUSTY
     return;
   }
   case ND_NEG:
@@ -763,23 +855,26 @@ static void gen_expr(Node *node) {
 
     switch (node->ty->kind) {
     case TY_FLOAT:
-      println("  mov $1, %%rax");
-      println("  shl $31, %%rax");
-      println("  movq %%rax, %%xmm1");
-      println("  xorps %%xmm1, %%xmm0");
-      return;
     case TY_DOUBLE:
-      println("  mov $1, %%rax");
-      println("  shl $63, %%rax");
-      println("  movq %%rax, %%xmm1");
-      println("  xorpd %%xmm1, %%xmm0");
-      return;
     case TY_LDOUBLE:
-      println("  fchs");
+      if (V) {
+        if (node->ty->kind == TY_DOUBLE) {
+          println("  // Charm does not support double");
+          println("  // double is treated as a float");
+        }
+        if (node->ty->kind == TY_LDOUBLE) {
+          println("  // Charm does not support long double");
+          println("  // long double is treated as a float");
+        }
+      }
+      println("  mov r6, #0");
+      println("  suf r7, r6, r7 // 0 - r7 to negate r7");
       return;
     }
 
-    println("  neg %%rax"); // HERE - how to do?
+    println("  mov r6, #0");
+    println("  sub r7, r6, r7 // 0 - r7 to negate r7");
+    //println("  neg r7, r7"); // Do I want a neg instruction
     return;
   case ND_VAR:
     gen_addr(node);
@@ -852,9 +947,9 @@ static void gen_expr(Node *node) {
     // My code does not consider node->var->ty->size.
     // My code zeros 4 bytes of memory on stack
     //println("  mov $%d, %%rcx", node->var->ty->size);
-    println("  // zero %s", node->var->name);
+    // TODO - consider node->var->ty->size
     println("  mov r6, #0");
-    println("  str r6, [r13, #%d]", -node->var->offset);
+    println("  str r6, [r13, #%d]   // %s", -node->var->offset, node->var->name);
     return;
   case ND_COND: {
     int c = count();
@@ -868,15 +963,24 @@ static void gen_expr(Node *node) {
     println(".label LL_end_%d", c);
     return;
   }
-  case ND_NOT:
+  case ND_NOT: {
+    int c = count();
     gen_expr(node->lhs);
     cmp_zero(node->lhs->ty);
-    println("  sete %%al");
-    println("  movzx %%al, %%rax");
+    println("  beq LL_false_%d", c);
+    println("  mov r7, #1");
+    println("  bal LL_end_%d", c);
+    println(".label LL_false_%d", c);
+    println("  mov r7, #0");
+    println(".label LL_end_%d", c);
     return;
+  }
   case ND_BITNOT:
     gen_expr(node->lhs);
-    println("  not %%rax");
+    println("  mov r6, #0");
+    println("  sub r7, r6, r7 // 0 - r7 to negate r7");
+    println("  sbi r7, r7, 1  // create one's complement");
+    //println("  one r7, r7"); // Do I want a one instruction for one's complement
     return;
   case ND_LOGAND: {
     int c = count();
@@ -886,10 +990,10 @@ static void gen_expr(Node *node) {
     gen_expr(node->rhs);
     cmp_zero(node->rhs->ty);
     println("  beq LL_false_%d", c);
-    println("  mov $1, %%rax");
+    println("  mov r7, #1");
     println("  bal LL_end_%d", c);
     println(".label LL_false_%d", c);
-    println("  mov $0, %%rax");
+    println("  mov r7, #0");
     println(".label LL_end_%d", c);
     return;
   }
@@ -901,13 +1005,19 @@ static void gen_expr(Node *node) {
     gen_expr(node->rhs);
     cmp_zero(node->rhs->ty);
     println("  bne LL_true_%d", c);
-    println("  mov $0, %%rax");
+    println("  mov r7, #0");
     println("  bal LL_end_%d", c);
-    println(".lable LL_true_%d", c);
-    println("  mov $1, %%rax");
+    println(".label LL_true_%d", c);
+    println("  mov r7, #1");
     println(".label LL_end_%d", c);
     return;
   }
+/* TODO
+Implement function calls with large return types - like return a structure
+Must pass a pointer to a buffer to receive the large return type
+   TODO
+Fix the use of fp regs. There are no differences in Charm.
+ */
   case ND_FUNCALL: {
     if (node->lhs->kind == ND_VAR && !strcmp(node->lhs->var->name, "alloca")) {
       gen_expr(node->args);
@@ -955,7 +1065,8 @@ static void gen_expr(Node *node) {
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
-          popf(fp++);
+          popf(gp++);  // GUSTY - This is a temporary fix
+          //popf(fp++);
         break;
       case TY_LDOUBLE:
         break;
@@ -975,26 +1086,10 @@ static void gen_expr(Node *node) {
 
     depth -= stack_args;
 
-    // It looks like the most significant 48 or 56 bits in RAX may
+    // For Intel, the most significant 48 or 56 bits in RAX may
     // contain garbage if a function return type is short or bool/char,
-    // respectively. We clear the upper bits here.
-    switch (node->ty->kind) {
-    case TY_BOOL:
-      println("  movzx %%al, %%eax");
-      return;
-    case TY_CHAR:
-      if (node->ty->is_unsigned)
-        println("  movzbl %%al, %%eax");
-      else
-        println("  movsbl %%al, %%eax");
-      return;
-    case TY_SHORT:
-      if (node->ty->is_unsigned)
-        println("  movzwl %%ax, %%eax");
-      else
-        println("  movswl %%ax, %%eax");
-      return;
-    }
+    // respectively. Original code cleared these bits. 
+    // Removed for Charm
 
     // If the return type is a small struct, a value is returned
     // using up to two registers.
@@ -1006,8 +1101,18 @@ static void gen_expr(Node *node) {
     return;
   }
   case ND_LABEL_VAL:
-    println("  lea %s(%%rip), %%rax", node->unique_label);
+    println("  mva r7, %s // *p = &&label", node->unique_label);
     return;
+/*
+C11 defines atomic types and functions.
+#include <stdatomic.h>
+
+atomic_int ai;
+
+++ai generates code that is thread safe <-- I think
+TODO - Study C atomics (like semaphores) and update the following two cases
+ */
+  // CAS - Atomic Compare and Swap
   case ND_CAS: {
     gen_expr(node->cas_addr);
     push();
@@ -1028,6 +1133,7 @@ static void gen_expr(Node *node) {
     println("  movzbl %%cl, %%eax");
     return;
   }
+  // EXCH - Atomic Exchange
   case ND_EXCH: {
     gen_expr(node->lhs);
     push();
@@ -1042,94 +1148,58 @@ static void gen_expr(Node *node) {
 
   switch (node->lhs->ty->kind) {
   case TY_FLOAT:
-  case TY_DOUBLE: {
+  case TY_DOUBLE: 
+  case TY_LDOUBLE: {
+    if (node->lhs->ty->kind == TY_LDOUBLE) {
+      println("  // Charm does not support long double");
+      println("  // Generate same code as float and double");
+    }
     gen_expr(node->rhs);
     pushf();
     gen_expr(node->lhs);
-    popf(1);
-
-    char *sz = (node->lhs->ty->kind == TY_FLOAT) ? "ss" : "sd";
-
+    popf(6);
     switch (node->kind) {
     case ND_ADD:
-      println("  add%s %%xmm1, %%xmm0", sz);
+      println("  adf r7, r7, r6");
       return;
     case ND_SUB:
-      println("  sub%s %%xmm1, %%xmm0", sz);
+      println("  suf r7, r7, r6");
       return;
     case ND_MUL:
-      println("  mul%s %%xmm1, %%xmm0", sz);
+      println("  muf r7, r7, r6");
       return;
     case ND_DIV:
-      println("  div%s %%xmm1, %%xmm0", sz);
+      println("  dif r7, r7, r6");
       return;
     case ND_EQ:
     case ND_NE:
     case ND_LT:
     case ND_LE:
-      println("  ucomi%s %%xmm0, %%xmm1", sz);
+      // GUSTY
+      println("  cmf r7, r6");
+      println("  mov r7, #1");
+      int c = count();
 
       if (node->kind == ND_EQ) {
-        println("  sete %%al");
-        println("  setnp %%dl");
-        println("  and %%dl, %%al");
+        println("  beq LL_cond_%d", c);
       } else if (node->kind == ND_NE) {
-        println("  setne %%al");
-        println("  setp %%dl");
-        println("  or %%dl, %%al");
+        println("  bne LL_cond_%d", c);
       } else if (node->kind == ND_LT) {
-        println("  seta %%al");
-      } else {
-        println("  setae %%al");
+        println("  blt LL_cond_%d", c);
+      } else if (node->kind == ND_LE) {
+        println("  ble LL_cond_%d", c);
       }
-
-      println("  and $1, %%al");
-      println("  movzb %%al, %%rax");
+      println("  mov r7, #0");
+      println(".label LL_cond_%d", c);
       return;
     }
 
     error_tok(node->tok, "invalid expression");
   }
-  case TY_LDOUBLE: {
-    gen_expr(node->lhs);
-    gen_expr(node->rhs);
 
-    switch (node->kind) {
-    case ND_ADD:
-      println("  faddp");
-      return;
-    case ND_SUB:
-      println("  fsubrp");
-      return;
-    case ND_MUL:
-      println("  fmulp");
-      return;
-    case ND_DIV:
-      println("  fdivrp");
-      return;
-    case ND_EQ:
-    case ND_NE:
-    case ND_LT:
-    case ND_LE:
-      println("  fcomip");
-      println("  fstp %%st(0)");
-
-      if (node->kind == ND_EQ)
-        println("  sete %%al");
-      else if (node->kind == ND_NE)
-        println("  setne %%al");
-      else if (node->kind == ND_LT)
-        println("  seta %%al");
-      else
-        println("  setae %%al");
-
-      println("  movzb %%al, %%rax");
-      return;
-    }
-
-    error_tok(node->tok, "invalid expression");
   }
-  }
+
+  // This code is for integer expressions?
 
   gen_expr(node->rhs);
   push();
@@ -1165,20 +1235,11 @@ static void gen_expr(Node *node) {
     println("  mul %s, %s, %s", ax, di, ax); // GUSTY
     return;
   case ND_DIV:
+    println("  div %s, %s, %s", ax, ax, di); // GUSTY
+    return;
   case ND_MOD:
-    if (node->ty->is_unsigned) {
-      println("  mov $0, %s", dx);
-      println("  div %s", di);
-    } else {
-      if (node->lhs->ty->size == 8)
-        println("  cqo");
-      else
-        println("  cdq");
-      println("  idiv %s", di);
-    }
-
-    if (node->kind == ND_MOD)
-      println("  mov %%rdx, %%rax");
+    // does an unsigned value make any difference, if (node->ty->is_unsigned) {
+    println("  mod %s, %s, %s", ax, ax, di); // GUSTY
     return;
   case ND_BITAND:
     println("  and %s, %s, %s", ax, di, ax); // GUSTY
@@ -1325,6 +1386,10 @@ static void gen_stmt(Node *node) {
     println(".label %s", node->unique_label);
     gen_stmt(node->lhs);
     return;
+/* TODO
+Implement the return of stuct / union.
+This is the functions copy_struct_reg and copy_struct_mem - see above
+ */
   case ND_RETURN:
     if (node->lhs) {
       gen_expr(node->lhs);
@@ -1431,42 +1496,46 @@ static void assign_lvar_offsets(Obj *prog) {
 }
 
 static void emit_data(Obj *prog) {
-  println("// r13 (sp) value");
+  if (V) println("// r13 (sp) value");
   println(".stack 0x5000");
-  println("// data section");
+  if (V) println("// data section");
   println(".data 0x100");
   for (Obj *var = prog; var; var = var->next) {
     if (var->is_function || !var->is_definition)
       continue;
 
-    if (var->is_static)
-      println("// .local %s", var->name);
-    else
-      println("// .globl %s", var->name);
+    if (V) {
+      if (var->is_static)
+        println("// .local %s", var->name);
+      else
+        println("// .globl %s", var->name);
+    }
 
     int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
       ? MAX(16, var->align) : var->align;
 
     // Common symbol
     if (opt_fcommon && var->is_tentative) {
-      println("// .comm %s, %d, %d", var->name, var->ty->size, align);
-      continue;
+      if (V) println("// .comm %s, %d, %d", var->name, var->ty->size, align);
+      //continue;
     }
 
     // .data or .tdata
     if (var->init_data) {
-      if (var->is_tls)
-        println("// .section .tdata,\"awT\",@progbits");
-      else
-        println("// .data");
+      if (V) {
+        if (var->is_tls)
+          println("// .section .tdata,\"awT\",@progbits");
+        else
+          println("// .data");
 
-      println("// .type %s, @object", var->name);
-      println("// .size %s, %d", var->name, var->ty->size);
-      println("// .kind %s, %d", var->name, var->ty->kind);
-      if (var->tok)
-        println("// .tokkind %s, %d", var->name, var->tok->kind);
-      println("// .align %d", align);
-      println("// .varalign %d", var->align);
+        println("// .type %s, @object", var->name);
+        println("// .size %s, %d", var->name, var->ty->size);
+        println("// .kind %s, %d", var->name, var->ty->kind);
+        if (var->tok)
+          println("// .tokkind %s, %d", var->name, var->tok->kind);
+        println("// .align %d", align);
+        println("// .varalign %d", var->align);
+      }
       if (var->name[0] == '.')
         println("// .label %s", var->name);
       else
@@ -1474,13 +1543,16 @@ static void emit_data(Obj *prog) {
 
       //println("Gusty: var->ty->size: %d\n", var->ty->size);
 
-/*
-The following code is somewhat of a mess.
+/* TODO
+The following code generates 32-bit values for static data
 - chemu is big endian for int
 - chemu uses calls linux printf for its internal printf
-- This causes chemu to use strings stored in little endian
+- chemu converts strings from big to little endian
 - I use the var->align == 1 to determine a string
 - Strings are output in little endian
+
+Currently, we do not generate a .bss section, which collects uninitialized static variables.
+Instead, we generate zeros for unitialized static variables.
  */
 
       Relocation *rel = var->rel;
@@ -1488,7 +1560,8 @@ The following code is somewhat of a mess.
       int value = 0;
       while (pos < var->ty->size) {
         if (rel && rel->offset == pos) {
-          println("// .quad %s%+ld", *rel->label, rel->addend);
+          if (V) println("// .quad %s%+ld", *rel->label, rel->addend);
+          println("  %s + %ld", *rel->label, rel->addend);
           rel = rel->next;
           pos += 8;
         } else {
@@ -1503,7 +1576,7 @@ The next two println calls are helpful to see the byte values
             value = (value << 8) | dataval;
           else
             value = value | (dataval << shft);
-	  if ((pos % 4) == 0) {
+	  if ((pos % 4) == 0) {       // output 32-bits (4 bytes) at a time
             println("  0x%x", value);
 	    value = 0;
 	  }
@@ -1524,46 +1597,50 @@ The next two println calls are helpful to see the byte values
     }
 
     // .bss or .tbss
-    if (var->is_tls)
-      println("// .section .tbss,\"awT\",@nobits");
-    else
-      println("// .bss");
+    int w = align_to(var->ty->size, 4) / 4;
+    println(".label %s", var->name);
+    for (int i = 0; i < w; i++)
+      println("  0x0");
+    if (V) {
+      if (var->is_tls)
+        println("// .section .tbss,\"awT\",@nobits");
+      else
+        println("// .bss");
 
-    println("// .align %d", align);
-    println("%s:", var->name);
-    println("// .zero %d", var->ty->size);
+      println("// .align %d", align);
+      println("// .zero %d", var->ty->size);
+      println("// .words %d", w);
+    }
   }
 }
 
+// Called to save fp parameter values passed in regs
 static void store_fp(int r, int offset, int sz) {
   switch (sz) {
   case 4:
-    println("  movss %%xmm%d, %d(%%rbp)", r, offset);
+    println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
     return;
   case 8:
-    println("  movsd %%xmm%d, %d(%%rbp)", r, offset);
+    println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
     return;
   }
   unreachable();
 }
 
+// Called to save gp parameter values passed in regs
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
   case 1:
-    println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
-    //println("  stb %s, [r13, #%d]", argreg8[r], offset);
+    println("  stb %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
     return;
   case 2:
     println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
-    //println("  mov %s, %d(%%rbp)", argreg16[r], offset);
     return;
   case 4:
     println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
-    //println("  stb %s, [r13, #%d]", argreg32[r], offset);
     return;
   case 8:
     println("  str %s, [r13, #%d] // sz: %d", argregcharm[r], -offset, sz);
-    //println("  mov %s, %d(%%rbp)", argreg64[r], offset);
     return;
   default:
     println("  str %s, [r13, #%d] // sz: %d, default", argregcharm[r], -offset, sz);
@@ -1600,30 +1677,14 @@ static void emit_text(Obj *prog) {
     println(".label %s", fn->name);
     current_fn = fn;
 
-    // GUSTY - ignore variatic functions for now. Maybe forever in Charm
+    // GUSTY - TODO - ignore variatic functions for now. Maybe forever in Charm
     int off = 0;
     //if (fn->va_area)
     //    off = fn->va_area->offset;
     //else
     //    off = 0;
-/*
-I have to study how chibbicc allocates the offsets for variables.
-Local variables have a negative offset, i.e., var->off is negative.
-I use positive offsets from the frame pointer, so I use -var->off.
-This works for now; however, I have had to fiddle with the stack_size and REG_SPACE
-With more study, I can better implement the stack for functions. 
-I am overallocating space for the stack.
-Sample code and variable offsets
-
-int add_me(int i, int j) {
-    int x = 5;
-
-The offsets for i and j are 20 and 24
-The offset for x is 4
- */
 #define REG_SPACE 9*4
     int stack_size = fn->stack_size;
-    //printf("GUSTY: fn->stack_size: %d\n", fn->stack_size);
     if (fn->va_area)
         stack_size = stack_size + fn->va_area->offset;
     //printf("GUSTY: fn->stack_size: %d\n", fn->stack_size);
@@ -1660,6 +1721,8 @@ The offset for x is 4
 
     }
 
+// The num of regs with args is determined by GP_MAX and FP_MAX
+// TODO - I have to merge store_fp and store_gp into one
     // Save passed-by-register arguments to the stack
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next) {
