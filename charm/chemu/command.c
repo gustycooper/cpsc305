@@ -448,6 +448,7 @@ void do_script(char *scriptfilename) {
   -f file.o or --OS file.o : load OS as part of emu. OS in file.o
  */
 static struct option long_options[] = {
+  {"white",  no_argument,       0,  'w' },
   {"os",     no_argument,       0,  'o' },
   {"OS",     required_argument, 0,  'f' },
   {"script", required_argument, 0,  's' },
@@ -459,14 +460,18 @@ static char *scriptfilename = "no script";
 /*
  * process_args - called to process command line args
  * argc and argv - propogated from main()
- * return 0  - success
+ * return 0  - success, black background
+ * return 1  - success, white background
  *        -1 - error
  */
 int process_args(int argc, char **argv) {
-    int load_os = 0, use_script = 0;
+    int load_os = 0, use_script = 0, rc = 0; // rc = 0 is black background
     int opt, long_index;
-    while ((opt = getopt_long(argc, argv, "of:s:", long_options, &long_index )) != -1) {
+    while ((opt = getopt_long(argc, argv, "wof:s:", long_options, &long_index )) != -1) {
         switch (opt) {
+          case 'w': 
+            rc = 1; // white background
+            break;
           case 'o': 
             load_os = 1;
             osfilename = "os.o";
@@ -523,5 +528,5 @@ int process_args(int argc, char **argv) {
         do_script(scriptfilename);
     }
     srand(time(0)); // initialize for rand() to work
-    return 0;
+    return rc;
 }

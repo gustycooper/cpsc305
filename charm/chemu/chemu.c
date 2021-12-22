@@ -21,6 +21,9 @@ TODO 7. Change prompt to indicated waiting and scanf
 
 //#define NCURSES 1
 
+// bg_val used to create white letters/black backgroud or black letters/white background
+static int bg_val = 0; // 0 - black, 1 - white, -1 - error
+
 #define MINLINES 41
 #define MINCOLS 136
 
@@ -122,7 +125,10 @@ void updateinswin(WINDOW *inswin) {
         mvwprintw(inswin, i+2, 1, inswinln, instinfo[i]);
         // Attempt to make the inst pointed to by PC red
         if (i == 5) {
-            wcolor_set(inswin, 1, NULL);
+            if (bg_val)
+                wcolor_set(inswin, 3, NULL);  // white background
+            else
+                wcolor_set(inswin, 1, NULL);  // black background
             mvwprintw(inswin, i+2, 1, inswinln, instinfo[i]);
             wrefresh(inswin);
             wcolor_set(inswin, 0, NULL);
@@ -278,8 +284,11 @@ void do_script(char *scriptfilename);
 int process_args(int argc, char **argv);
 int getcmd(char *buf, int nbuf);
 
+#define BRIGHT_WHITE 15
+
 int main(int argc, char **argv) {
-    if (process_args(argc, argv)) // non-zero is error
+    bg_val = process_args(argc, argv); // 0 - black, 1 - white, -1 - error
+    if (bg_val == -1)
         exit(EXIT_FAILURE);
 #ifdef NCURSES
     WINDOW *mainwin, *regwin, *inswin, *cmdwin, *reswin;
@@ -298,6 +307,29 @@ int main(int argc, char **argv) {
         refresh();
         exit(EXIT_FAILURE);
     }
+    start_color();
+    if (has_colors()) {
+        init_pair(1, COLOR_RED, COLOR_BLACK);
+        init_pair(2, COLOR_WHITE, COLOR_BLACK);
+        if (bg_val == 1) { // white background
+            if (can_change_color()) {
+                init_color(BRIGHT_WHITE, 1000,1000,1000);
+                init_pair(0xff, COLOR_BLACK, BRIGHT_WHITE);
+                init_pair(3, COLOR_RED, BRIGHT_WHITE);
+            } 
+            else if (COLORS >= 16) {
+                init_pair(0xff, COLOR_BLACK, BRIGHT_WHITE);
+                init_pair(3, COLOR_RED, BRIGHT_WHITE);
+            } 
+            else {
+                init_pair(0xff, COLOR_BLACK, COLOR_WHITE);
+                init_pair(3, COLOR_RED, COLOR_WHITE);
+            }
+            wbkgd(mainwin, COLOR_PAIR(0xff));
+        }
+        //wattron(inswin, COLOR_PAIR(1));
+    }
+        
 
     /*  Switch of echoing and enable keypad (for arrow keys)  */
     noecho();
@@ -327,13 +359,6 @@ int main(int argc, char **argv) {
     mvwaddstr(inswin, 1, 1, "                           Instructions                  ");
     updateinswin(inswin);
     // colors are not used yet. Code remains as a reminder
-    start_color();
-    if (has_colors()) {
-        init_pair(1, COLOR_RED, COLOR_BLACK);
-        init_pair(2, COLOR_WHITE, COLOR_BLACK);
-        //wattron(inswin, COLOR_PAIR(1));
-    }
-        
     //color_set(1, NULL);
 
     

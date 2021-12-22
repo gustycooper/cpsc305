@@ -155,6 +155,7 @@ static int perc; // the number of % in fmt string
 // After scanf(%d), must byteswap. percd[] tracks %d
 static int percd[2]; // a 1 indicates %d
 static int percs[2]; // a 1 indicates %s
+static int percf[2]; // a 1 indicates %f
 // cheumscanf called from main() in chemu.c to apply scanf to str.
 // char *str points the the user's input
 void chemuscanf(char *str) {
@@ -178,13 +179,16 @@ void chemuscanf(char *str) {
 
 }
 
-// TODO - for printf("%s" ), must pass &memory[registers[1]]
+// TODO - currently printf("%f" ) works with one %f, update to allow %s %f, %d %f, %f %f
 // The address in registers[1] is a local chemu address
+// NOTE: size of format string must be < 80 (0 to 79 index)
 void chemuioi(int op2) {
     percd[0] = 0;
     percd[1] = 0;
     percs[0] = 0;
     percs[1] = 0;
+    percf[0] = 0;
+    percf[1] = 0;
     if (op2 == 0x10 || op2 == 0x11) { // scanf or printf
         char *p = &memory[registers[1]];
         perc = 0; // count % chars in format string
@@ -197,6 +201,8 @@ void chemuioi(int op2) {
                     percd[perc-1] = 1;
                 else if (*p == 's')
                     percs[perc-1] = 1;
+                else if (*p == 'f')
+                    percf[perc-1] = 1;
             }
         }
         if (perc > 2)
@@ -210,7 +216,15 @@ void chemuioi(int op2) {
               case 1:
                 if (percd[0] == 1)
                     snprintf(temp, 80, &memory[registers[1]], registers[2]);
-                else
+                else if (percf[0] == 1) {
+                    union {
+                        float f;
+                        int i;
+                    } u;
+                    //u.i = registers[2];
+                    u.i = 0x3fa00000;
+                    snprintf(temp, 80, &memory[registers[1]], u.f);
+                } else
                     snprintf(temp, 80, &memory[registers[1]], &memory[registers[2]]);
                 break;
               case 2:
