@@ -339,10 +339,10 @@ int errors() {
     int errorfound = 0;
     for (int i = 0; i < linenum-1; i++) {
         if (toks[i].linetype > comment && toks[i].linetype != number) {
-            printf("+++ Error +++ Line number: %d\n", toks[i].linenum);
+            fprintf(stderr, "+++ Error +++ Line number: %d\n", toks[i].linenum);
             for (int j = 0; j < toks[i].numtoks-1; j++) // numtoks-1 to ignore endd token
-                printf("%s ", toks[i].toks[j].tok_str);
-            printf("\n");
+                fprintf(stderr, "%s ", toks[i].toks[j].tok_str);
+            fprintf(stderr, "\n");
             errorfound = 1;
         // Check for other errors, e.g. add r, r5, r5   .label without following num or inst
         }
@@ -585,14 +585,14 @@ int get_opts(int count, char *args[]) {
 int main(int argc, char **argv) {
     int optind = get_opts(argc, argv);
     if (!optind) {
-        printf("Bad chasm command - probably missing file for -l\n");
+        fprintf(stderr, "Bad chasm command - probably missing file for -l\n");
         return -1;
     }
 
     // An open-do-close pattern to process the assembly file
     FILE *fp;
     if ((fp = fopen(argv[optind], "r")) == NULL) {
-        printf("File %s not found!\n", argv[optind]);
+        fprintf(stderr, "File %s not found!\n", argv[optind]);
         return -1;
     }
     // Loop - reads line, tokenizes line in tok, saves tok in array toks
@@ -605,7 +605,7 @@ int main(int argc, char **argv) {
         toks[linenum-1] = tok;   // save token in array of tokens
         linenum++;
         if (linenum >= MAX_PROG_LINES)
-            printf("Too many lines, Max: %d\n", MAX_PROG_LINES);
+            fprintf(stderr, "Too many lines, Max: %d\n", MAX_PROG_LINES);
     }
     fclose(fp);                  // end open-do-close on assembly file
     addrsymopcode();             // create symbol table and fill in toks[].address
