@@ -263,6 +263,7 @@ static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
  ** return 0 normal                                              **
  ** return 1 when breakpoint is hit                              **
  ** return 2 when waiting on user input for scanf                **
+ ** return 4 when memory access error                            **
  ** return -1 for illegal instruction                            **
  ******************************************************************/
 int step() {
@@ -278,7 +279,8 @@ int step() {
     }
     breakpointexecuted = 0;
     int inst; 
-    system_bus(pc, &inst, READ);
+    if (system_bus(pc, &inst, READ))
+        return 4;
     insthist[insthist_i].addr = pc;
     insthist[insthist_i].inst = inst;
     insthist_i = (insthist_i + 1) % INSTHIST;
@@ -287,8 +289,10 @@ int step() {
  ******************************************************************/
     decoded *d = decode(inst);
     if (!d) {
-        printf("Invalid instruction at address: %08x", registers[PC]);
-        printf("pc: 0x%08x, inst: 0x%08x\n", registers[PC], inst);
+        if (verbose_cpu) {
+            printf("Invalid instruction at address: %08x", registers[PC]);
+            printf("pc: 0x%08x, inst: 0x%08x\n", registers[PC], inst);
+        }
         registers[PC] = pc;
         return -1;
 
@@ -357,14 +361,17 @@ int step() {
                 memval_before = ldbstb;
             }
         }
+        int mem_access_error = 0;
         if (word)
-            system_bus(address, &registers[d->rd], control);
+            mem_access_error = system_bus(address, &registers[d->rd], control);
         else {
             ldbstb = registers[d->rd] & 0xff;
-            system_bus_b(address, &ldbstb, control);
+            mem_access_error = system_bus_b(address, &ldbstb, control);
             if (control == READ)
                 registers[d->rd] = ldbstb;
         }
+        if (mem_access_error)
+            return 4;
         pc += 4;
         break;
       case 5: // arilog inst
@@ -643,11 +650,6 @@ int step() {
     return retval;
 }
 
-// return values
-//  0 steps all steps
-//  1 breakpoint
-//  2 bal to itself
-//  3 waiting on input from scanf
 /******************************************************************
  ***************************  STEP_N  *****************************
  ** step_n() calls step() n times                                **
@@ -656,6 +658,8 @@ int step() {
  **  return 0  step_n stepped all steps                          **
  **  return 1  step_n encountered a breakpoint                   **
  **  return 2  step_n encountered a bal to itself                **
+ **  return 3  step_n waiting on input from scanf                **
+ **  return 4  step_n encountered memory access error            **
  ******************************************************************/
 int step_n(int n) {
     int s = 0;
@@ -666,6 +670,8 @@ int step_n(int n) {
             return 1;
         else if (s == 2) // 2 means waiting on input from scanf
             return 3;
+        else if (s == 4) // 4 means memory access error
+            return 4;
         else if (s < 0)
             return -1;
         if (registers[15] == pc)

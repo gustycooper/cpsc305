@@ -235,16 +235,49 @@ int do_cmd(int argc, char **cmdargv) {
                     sprintf(result, "<<< *** >>>");
                     addresult(result);
                 }
+                else if (finished == 4) {
+                    int inst; 
+                    system_bus(get_reg(PC), &inst, READ);
+                    sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
+                    addresult(result);
+                }
                 else if (finished < 0) {
-                    sprintf(result, "Illegal instruction:");
+                    int inst; 
+                    system_bus(get_reg(PC), &inst, READ);
+                    sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
                     addresult(result);
                 }
                 pipeline();
             }
         }
         else {
-            if (step() < 0) { 
-                sprintf(result, "Illegal instruction:");
+            finished = step();
+            if (finished == 1) {
+                sprintf(result, "breakpoint: 0x%08x", breakpoint);
+                addresult(result);
+            }
+            else if (finished == 2) {
+                sprintf(result, "branch to self:");
+                addresult(result);
+            }
+            else if (finished == 3) {
+                sprintf(result, "<<< *** >>>");
+                addresult(result);
+                sprintf(result, "waiting on input from scanf:");
+                addresult(result);
+                sprintf(result, "<<< *** >>>");
+                addresult(result);
+            }
+            else if (finished == 4) { 
+                int inst; 
+                system_bus(get_reg(PC), &inst, READ);
+                sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
+                addresult(result);
+            }
+            else if (finished < 0) { 
+                int inst; 
+                system_bus(get_reg(PC), &inst, READ);
+                sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
                 addresult(result);
             }
             pipeline();
@@ -266,10 +299,18 @@ int do_cmd(int argc, char **cmdargv) {
             t = number(cmdargv[2]);
             mem_dump_len = t >= 0 ? t : mem_dump_len;
         }
-        if (cmdargv[0][1] == 'b')
-            dump_memory(mem_dump_addr, mem_dump_len); 
-        else
-            dump_memory_word(mem_dump_addr, mem_dump_len); 
+        if (cmdargv[0][1] == 'b') {
+            if (dump_memory(mem_dump_addr, mem_dump_len)) {
+                sprintf(result, "%s", "Invalid address");
+                addresult(result);
+            } 
+        }
+        else {
+            if (dump_memory_word(mem_dump_addr, mem_dump_len)) {
+                sprintf(result, "%s", "Invalid address");
+                addresult(result);
+            } 
+        }
         mem_dump_addr += mem_dump_len;
     } else if (cmdargv[0][0] == 'l' && cmdargv[0][1] == 'd') {
       if (argc != 2) { // must issue ld filename

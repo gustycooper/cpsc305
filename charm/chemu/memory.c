@@ -5,10 +5,7 @@
 #include "cpu.h"
 #include "dict.h"
 
-// TODO 1. Update memory[MAX_MEM] to use a #define
-// TODO 2. Update memory access functions to ensure address < MAX_MEM
-
-unsigned char memory[32*1024]; // 32K bytes
+unsigned char memory[MAX_MEM]; // 32K bytes
 
 void memory_store(int address, unsigned char value) {
     memory[address] = value;
@@ -32,28 +29,43 @@ unsigned int memory_fetch_word(int address) {
            memory[address + 3];
 }
 
-// read/write 32-bit value from/to memory
-void system_bus(int address, int *value, int control) {
+// read/write 32-bit value from/to memory - return values
+// 0 - success
+// 1 - memory address bad
+int system_bus(int address, int *value, int control) {
+    if (address < 0 || address >= MAX_MEM)
+        return 1;
     if (control == READ)
         *value = memory_fetch_word(address);
     else
         memory_store_word(address, *value);
+    return 0;
 }
 
-// read/write byte (8-bit) value from/to memory
-void system_bus_b(int address, unsigned char *value, int control) {
+// read/write byte (8-bit) value from/to memory - return values
+// 0 - success
+// 1 - memory address bad
+int system_bus_b(int address, unsigned char *value, int control) {
+    if (address < 0 || address >= MAX_MEM)
+        return 1;
     if (control == READ)
         *value = memory_fetch(address);
     else
         memory_store(address, *value);
+    return 0;
 }
 
 void addresult(char *result);
 static char result[80];
 
-void dump_memory(int start_address, int num_bytes) {
+// dump memory bytes (8-bit quantities) - return values
+// 0 - success
+// 1 - memory address bad
+int dump_memory(int start_address, int num_bytes) {
     int start_boundary = start_address - (start_address % 8);
     int boundary_bytes = num_bytes + (start_address - start_boundary);
+    if (start_boundary < 0 || boundary_bytes >= MAX_MEM)
+        return 1;
     for (int i = start_boundary; i < start_boundary+boundary_bytes; i+=8) {
         sprintf(result, "0x%04x (0d%04d) 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x ", 
                i, i,
@@ -61,9 +73,15 @@ void dump_memory(int start_address, int num_bytes) {
                memory[i+4], memory[i+5], memory[i+6], memory[i+7]);
         addresult(result);
     }
+    return 0;
 }
 
-void dump_memory_word(int start_address, int num_words) {
+// dumb memory words (32-bit quantities) - return values
+// 0 - success
+// 1 - memory address bad
+int dump_memory_word(int start_address, int num_words) {
+    if (start_address < 0 || (start_address+(num_words*4) >= MAX_MEM))
+        return 1;
     for (int i = start_address; i < start_address+num_words; i+=16) {
         sprintf(result, "0x%04x (0d%04d) 0x%08x 0x%08x 0x%08x 0x%08x  ", 
                i, i,
@@ -73,6 +91,7 @@ void dump_memory_word(int start_address, int num_words) {
                memory[i+12] << 24 | memory[i+13] << 16 | memory[i+14] << 8 | memory[i+15]);
         addresult(result);
     }
+    return 0;
 }
 
 #define MAX_LINE 100
