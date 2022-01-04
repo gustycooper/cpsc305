@@ -19,49 +19,7 @@ char result[80]; // used to add a result to ncurses result window
 extern int verbose_cpu;
 extern int total_steps;
 /*
- Commands - numbers are decimal or hex, which have a 0x.
- Users are responsible for address boundaries - l 0x105 should be l 0x104
- r - show regs
- r 1 - show reg 1
- r 1 0x10 - modify reg 1, put 16 into r1
- r 1 r - modify reg 1 with a random 32-bit number
- r 1 rN - modify reg 1 with a random number
-        - N=1, random number between 0 and 100
-        - N=2, random number between 0 and 200
-        - N=-1, negative random number between 0 and 100
-        - N=-2, negative random number between 0 and 200
- s - step, does a fetch, decode, execute of one instruction
- s 3 - step 3 times using s, maximum of 100 steps
- d - dump 16 bytes of memory, starting at where last dump ended
-   - show each bytes as a 2-digit hex number
- d 500 - dump 16 bytes of memory starting at 500
- d 500 0x20 - dump 32 bytes of memory starting at 500
-          - The 32 is sticky. The next d or dw command with a length dumps 20 bytes.
- dw - dump 16 bytes of memory, starting at where last dump ended
-    - show each 4 bytes as an 8-digit hex number that is a 32-bit Big-Endian value
- l - list 16 bytes of memory, starting at where last list ended, list disassembles 32-bits (4 bytes)
- l 500 - list 16 bytes of memory starting at 500
- l 500 32 - list 32 bytes of memory starting at 500
-          - The 32 is sticky. The next l command with a length dumps 20 bytes.
- m 100 606 - modify memory address 100 with 606
- m 100 r - modify memory address 100 with a random 32-bit number
- m 100 rN - modify memory address 100 with a random number
-          - N=1, random number between 0 and 100
-          - N=2, random number between 0 and 200
-          - N=-1, negative random number between 0 and 100
-          - N=-2, negative random number between 0 and 200
- q - quit
- y - show symbols and their addresses
- v - Turn verbose off (off by default)
-   - v anything - Turn verbose on
-   - v by itselft - Turn verbose off
- 0xf - show Decimal 15
- 0d15 - show Hex 0xf
- pl - show pipeline in Instructions window
- cp 500 abc - copy abc to address 500, null terminated
- ld file.o - load file.o into memory
- .ls - run the ls command as a child process, . prefixes Linux commands
- < file.emu - run the script file.emu
+ Commands - see documentation for description of commands
  */
 
 int ishexdigit(char c) {
@@ -158,10 +116,51 @@ static int mem_list_len = MEM_LIST_LEN;
 
 extern int breakpoint;
 
+// Parameter finished is the status returned from step_n / step.
+void step_results(int finished) {
+    if (finished == 1) {
+        sprintf(result, "breakpoint: 0x%08x", breakpoint);
+        addresult(result);
+    }
+    else if (finished == 2) {
+        sprintf(result, "branch to self:");
+        addresult(result);
+    }
+    else if (finished == 3) {
+        sprintf(result, "<<< *** >>>");
+        addresult(result);
+        sprintf(result, "waiting on input from scanf:");
+        addresult(result);
+        sprintf(result, "<<< *** >>>");
+        addresult(result);
+    }
+    else if (finished == 4) {
+        int inst; 
+        system_bus(get_reg(PC), &inst, READ);
+        sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
+        addresult(result);
+    }
+    else if (finished < 0) {
+        int inst; 
+        system_bus(get_reg(PC), &inst, READ);
+        sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
+        addresult(result);
+    }
+
+}
+
 int do_cmd(int argc, char **cmdargv) {
     int finished = 0;
     int retval = 1;
-    if (cmdargv[0][0] == 'r') {
+    if (cmdargv[0][0] == 'r' && cmdargv[0][1] == 'u' && cmdargv[0][2] == 'n') {
+        while (1) {
+            finished = step_n(100);
+            if (finished)
+                break;
+        }
+        step_results(finished);
+        pipeline();
+    } else if (cmdargv[0][0] == 'r') {
         if (argc == 3) { // cmd is r 0 55, modify r0 to be 55
             int reg = number(cmdargv[1]);
             int rval = 0, val = 0;
@@ -219,67 +218,13 @@ int do_cmd(int argc, char **cmdargv) {
             }
             else {
                 finished = step_n(steps);
-                if (finished == 1) {
-                    sprintf(result, "breakpoint: 0x%08x", breakpoint);
-                    addresult(result);
-                }
-                else if (finished == 2) {
-                    sprintf(result, "branch to self:");
-                    addresult(result);
-                }
-                else if (finished == 3) {
-                    sprintf(result, "<<< *** >>>");
-                    addresult(result);
-                    sprintf(result, "waiting on input from scanf:");
-                    addresult(result);
-                    sprintf(result, "<<< *** >>>");
-                    addresult(result);
-                }
-                else if (finished == 4) {
-                    int inst; 
-                    system_bus(get_reg(PC), &inst, READ);
-                    sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-                    addresult(result);
-                }
-                else if (finished < 0) {
-                    int inst; 
-                    system_bus(get_reg(PC), &inst, READ);
-                    sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-                    addresult(result);
-                }
+                step_results(finished);
                 pipeline();
             }
         }
         else {
             finished = step();
-            if (finished == 1) {
-                sprintf(result, "breakpoint: 0x%08x", breakpoint);
-                addresult(result);
-            }
-            else if (finished == 2) {
-                sprintf(result, "branch to self:");
-                addresult(result);
-            }
-            else if (finished == 3) {
-                sprintf(result, "<<< *** >>>");
-                addresult(result);
-                sprintf(result, "waiting on input from scanf:");
-                addresult(result);
-                sprintf(result, "<<< *** >>>");
-                addresult(result);
-            }
-            else if (finished == 4) { 
-                int inst; 
-                system_bus(get_reg(PC), &inst, READ);
-                sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-                addresult(result);
-            }
-            else if (finished < 0) { 
-                int inst; 
-                system_bus(get_reg(PC), &inst, READ);
-                sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-                addresult(result);
-            }
+            step_results(finished);
             pipeline();
             show_mem_changed();
         }
