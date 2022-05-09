@@ -55,8 +55,7 @@ int system_bus_b(int address, unsigned char *value, int control) {
     return 0;
 }
 
-void addresult(char *result);
-static char result[80];
+void printres(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 // dump memory bytes (8-bit quantities) - return values
 // 0 - success
@@ -67,11 +66,10 @@ int dump_memory(int start_address, int num_bytes) {
     if (start_boundary < 0 || boundary_bytes >= MAX_MEM)
         return 1;
     for (int i = start_boundary; i < start_boundary+boundary_bytes; i+=8) {
-        sprintf(result, "0x%04x (0d%04d) 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x ", 
+        printres("0x%04x (0d%04d) 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x ", 
                i, i,
                memory[i  ], memory[i+1], memory[i+2], memory[i+3],
                memory[i+4], memory[i+5], memory[i+6], memory[i+7]);
-        addresult(result);
     }
     return 0;
 }
@@ -82,14 +80,13 @@ int dump_memory(int start_address, int num_bytes) {
 int dump_memory_word(int start_address, int num_words) {
     if (start_address < 0 || (start_address+(num_words*4) >= MAX_MEM))
         return 1;
-    for (int i = start_address; i < start_address+num_words; i+=16) {
-        sprintf(result, "0x%04x (0d%04d) 0x%08x 0x%08x 0x%08x 0x%08x  ", 
+    for (int i = start_address; i < start_address+(num_words*4); i+=16) {
+        printres("0x%04x (0d%04d) 0x%08x 0x%08x 0x%08x 0x%08x  ", 
                i, i,
                memory[i   ] << 24 | memory[i+1 ] << 16 | memory[i+2 ] << 8 | memory[i+3 ],
                memory[i+4 ] << 24 | memory[i+5 ] << 16 | memory[i+6 ] << 8 | memory[i+7 ],
                memory[i+8 ] << 24 | memory[i+9 ] << 16 | memory[i+10] << 8 | memory[i+11],
                memory[i+12] << 24 | memory[i+13] << 16 | memory[i+14] << 8 | memory[i+15]);
-        addresult(result);
     }
     return 0;
 }
@@ -109,8 +106,7 @@ The first .text encountered set the pc to the address
 void load_memory(char *filename) {
     FILE *fp = fopen(filename, "r");
     if (fp == NULL) {
-        sprintf(result, "File %s not found!", filename);
-        addresult(result);
+        printres("File %s not found!", filename);
         return;
     }
     int address = 0;
@@ -165,6 +161,5 @@ void load_memory(char *filename) {
         }
     }
     fclose(fp);
-    sprintf(result, "File %s loaded!", filename);
-    addresult(result);
+    printres("File %s loaded!", filename);
 }

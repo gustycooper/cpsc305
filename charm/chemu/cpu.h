@@ -27,6 +27,15 @@
 #define R14 14
 #define R15 15
 
+enum stepret {
+    ILLEGALINST = -1,
+    NORMAL = 0,
+    BREAKPOINT = 1,
+    BALTOSELF = 2,
+    SCANF = 3,
+    MEMERROR = 4
+};
+
 void set_reg(int reg, int value);
 int get_reg(int reg);
 void set_cpsr(int bit);

@@ -71,15 +71,13 @@ int dictget(const char *key) {
     return -1000001;
 }
 
-void addresult(char *res);
-char result[80]; // used to add a result to ncurses result window
+void printres(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 void dictshow() {
-    addresult("**** symbols ****");
+    printres("**** symbols ****");
     for (int i = 0; i < DICT_SIZE; i++) {
         for (struct elem *e = dict[i]; e != 0; e = e->next) {
-            sprintf(result, "symbol: %s, value: %d", e->key, e->value);
-            addresult(result);
+            printres("symbol: %s, value: 0x%x", e->key, e->value);
         }
     }
 }

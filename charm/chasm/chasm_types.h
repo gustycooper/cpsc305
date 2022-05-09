@@ -10,14 +10,15 @@ enum inst_c {
 enum inst_t {
     ldr, ldb, str, stb, 
     add, sub, mul, dIv, 
-    and, orr, eor, adc, 
-    sbc, adf, sbf, muf, 
-    dif, adi, sbi, mov, 
-    mva, cmp, tst, teq, 
-    shf, sha, rot, bal, 
-    beq, bne, blt, ble, 
-    bgt, bge, blr, ker,
-    srg, ioi,
+    mod, and, orr, eor, 
+    adc, sbc, adf, suf, 
+    muf, dif, mov, mva, 
+    cmp, tst, teq, shf, 
+    sha, rot, one, fti, 
+    itf, cmf, bal, beq, 
+    bne, blt, ble, bgt, 
+    bge, blr, ker, srg, 
+    ioi, adi, sbi,
 };
 
 struct inst_info {

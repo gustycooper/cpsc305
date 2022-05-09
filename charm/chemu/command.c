@@ -13,8 +13,7 @@
 #include "isa.h"
 #include "dict.h"
 
-void addresult(char *res);
-char result[80]; // used to add a result to ncurses result window
+void printres(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 extern int verbose_cpu;
 extern int total_steps;
@@ -54,10 +53,8 @@ void memory_list(int start_address, int num_words) {
     for (int i = start_address; i < start_address+num_words; i+=4) {
         int val;
         system_bus(i, &val, READ);
-        sprintf(result, "0x%08x: 0x%08x: ", i, val);
         char *inst = disassemble(val);
-        strcat(result, inst);
-        addresult(result);
+        printres("0x%08x: 0x%08x: %s", i, val, inst);
     }
 }
 
@@ -108,49 +105,45 @@ int my_random(int start, int end) { // assumes srand has been called
 static char *cmdargv[MAXARGS];
 static int mem_dump_addr = 0;
 #define MEM_SIZE_WORDS 16384 // 2 ^ 14 word addresses
-#define MEM_DUMP_LEN   128
+#define MEM_DUMP_LEN   32
 #define MEM_LIST_LEN   64
 static int mem_dump_len = MEM_DUMP_LEN;
 static int mem_list_addr = 0;
 static int mem_list_len = MEM_LIST_LEN;
 
-extern int breakpoint;
+extern int breakpoint0, breakpoint1;
 
 // Parameter finished is the status returned from step_n / step.
-void step_results(int finished) {
-    if (finished == 1) {
-        sprintf(result, "breakpoint: 0x%08x", breakpoint);
-        addresult(result);
+void step_results(enum stepret finished) {
+    if (finished == BREAKPOINT) {
+        if (get_reg(PC) == breakpoint0)
+            printres("breakpoint: 0x%08x", breakpoint0);
+        else
+            printres("breakpoint: 0x%08x", breakpoint1);
     }
-    else if (finished == 2) {
-        sprintf(result, "branch to self:");
-        addresult(result);
+    else if (finished == BALTOSELF) {
+        printres("branch to self:");
     }
-    else if (finished == 3) {
-        sprintf(result, "<<< *** >>>");
-        addresult(result);
-        sprintf(result, "waiting on input from scanf:");
-        addresult(result);
-        sprintf(result, "<<< *** >>>");
-        addresult(result);
+    else if (finished == SCANF) {
+        printres("<<< *** >>>");
+        printres("waiting on input from scanf:");
+        printres("<<< *** >>>");
     }
-    else if (finished == 4) {
+    else if (finished == MEMERROR) {
         int inst; 
         system_bus(get_reg(PC), &inst, READ);
-        sprintf(result, "Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-        addresult(result);
+        printres("Instruction mem access error: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
     }
     else if (finished < 0) {
         int inst; 
         system_bus(get_reg(PC), &inst, READ);
-        sprintf(result, "Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
-        addresult(result);
+        printres("Illegal instruction: pc: 0x%08x, inst: 0x%08x", get_reg(PC), inst);
     }
 
 }
 
 int do_cmd(int argc, char **cmdargv) {
-    int finished = 0;
+    enum stepret finished = NORMAL;
     int retval = 1;
     if (cmdargv[0][0] == 'r' && cmdargv[0][1] == 'u' && cmdargv[0][2] == 'n') {
         while (1) {
@@ -179,42 +172,35 @@ int do_cmd(int argc, char **cmdargv) {
             else
                 val  = number(cmdargv[2]);
             if (reg == -1 || reg > 15) {
-                sprintf(result, "%s", "invalid reg on r command.");
-                addresult(result);
+                printres("%s", "invalid reg on r command.");
             }
             else {
                 val = rval ? rval : val;
                 set_reg(reg, val);
-                sprintf(result, "R%-3d:%11d (0x%.8x)", reg, get_reg(reg), get_reg(reg));
-                addresult(result);
+                printres("R%-3d:%11d (0x%.8x)", reg, get_reg(reg), get_reg(reg));
             }
         } else if (argc == 2) { // cmd is r 6, display r6
             int reg = number(cmdargv[1]);
             if (reg == -1 || reg > 15) {
-                sprintf(result, "%s", "invalid reg on r command.");
-                addresult(result);
+                printres("%s", "invalid reg on r command.");
             }
             else {
-                sprintf(result, "R%-3d:%11d (0x%.8x)", reg, get_reg(reg), get_reg(reg));
-                addresult(result);
+                printres("R%-3d:%11d (0x%.8x)", reg, get_reg(reg), get_reg(reg));
             }
         } else { // print all regs
 #ifdef NCURSES
-            sprintf(result, "See regs in window above.");
+            printres("See regs in window above.");
 #else
-            sprintf(result, "Regs.");
+            printres("Regs.");
 #endif
-            addresult(result);
         }
     } else if (cmdargv[0][0] == 's' && cmdargv[0][1] == 't') {
-            sprintf(result, "Total Steps: %d", total_steps);
-            addresult(result);
+            printres("Total Steps: %d", total_steps);
     } else if (cmdargv[0][0] == 's') {
         if (argc == 2) { // format is s num
             int steps = number(cmdargv[1]);
             if (steps == -1 || steps > 30000) {
-                sprintf(result, "%d: %s", steps, "invalid number of steps on s command - 30000 max.");
-                addresult(result);
+                printres("%d: %s", steps, "invalid number of steps on s command - 30000 max.");
             }
             else {
                 finished = step_n(steps);
@@ -246,21 +232,18 @@ int do_cmd(int argc, char **cmdargv) {
         }
         if (cmdargv[0][1] == 'b') {
             if (dump_memory(mem_dump_addr, mem_dump_len)) {
-                sprintf(result, "%s", "Invalid address");
-                addresult(result);
+                printres("%s", "Invalid address");
             } 
         }
         else {
             if (dump_memory_word(mem_dump_addr, mem_dump_len)) {
-                sprintf(result, "%s", "Invalid address");
-                addresult(result);
+                printres("%s", "Invalid address");
             } 
         }
         mem_dump_addr += mem_dump_len;
     } else if (cmdargv[0][0] == 'l' && cmdargv[0][1] == 'd') {
       if (argc != 2) { // must issue ld filename
-          sprintf(result, "%s", "format is ld filename");
-          addresult(result);
+          printres("%s", "format is ld filename");
       } else {
           load_memory(cmdargv[1]);
       }
@@ -278,10 +261,34 @@ int do_cmd(int argc, char **cmdargv) {
         }
         if (argc > 2) { // we have l addr len or l symbol len
             t = number(cmdargv[2]);
-            mem_list_len = t >= 0 ? t : mem_list_len;
+            mem_list_len = t >= 0 ? t*4 : mem_list_len;
         }
         memory_list(mem_list_addr, mem_list_len);
         mem_list_addr += mem_list_len;
+    } else if (cmdargv[0][0] == 'm' && cmdargv[0][1] == 'b') {
+        if (argc == 3) { // format is mb addr value
+            int addr; 
+            unsigned char val;
+            if (cmdargv[1][0] >= 'a' && cmdargv[1][0] <= 'z') // m symbol val
+                addr = dictget(cmdargv[1]);
+            else // m addr val
+                addr = number(cmdargv[1]);
+
+            if ((cmdargv[2][0] >= 'a' && cmdargv[2][0] <= 'z') ||   // m addr letter
+                (cmdargv[2][0] >= 'A' && cmdargv[2][0] <= 'Z'))     // m addr letter
+                val = cmdargv[2][0];
+            else // m addr val
+                val  = number(cmdargv[2]);
+            if (addr < 0) {
+                printres("%s", "invalid address on m command.");
+            }
+            else {
+                system_bus_b(addr, &val, WRITE);
+            }
+        }
+        else {
+            printres("%s", "format is mb addr value");
+        }
     } else if (cmdargv[0][0] == 'm') {
         if (argc == 3) { // format is m addr value
             int addr;
@@ -306,8 +313,7 @@ int do_cmd(int argc, char **cmdargv) {
             else
                 val  = number(cmdargv[2]);
             if (addr < 0) {
-                sprintf(result, "%s", "invalid address on m command.");
-                addresult(result);
+                printres("%s", "invalid address on m command.");
             }
             else {
                 val = rval ? rval : val;
@@ -315,12 +321,14 @@ int do_cmd(int argc, char **cmdargv) {
             }
         }
         else {
-            sprintf(result, "%s", "format is m addr value");
-            addresult(result);
+            printres("%s", "format is m addr value");
         }
     } else if (cmdargv[0][0] == 'p' && cmdargv[0][1] == 'l') {
         pipeline();
     } else if (cmdargv[0][0] == 'b') {
+        int *bp = &breakpoint0;
+        if (cmdargv[0][1] == '1')
+            bp = &breakpoint1;
         if (argc > 1) { // b addr - set a break point
             int addr;
             if (cmdargv[1][0] >= 'a' && cmdargv[1][0] <= 'z') // b symbol
@@ -328,23 +336,21 @@ int do_cmd(int argc, char **cmdargv) {
             else // b addr
                 addr = number(cmdargv[1]);
             if (addr < 0)
-                breakpoint = -1;
+                *bp = -1;
             else
-                breakpoint = addr;
+                *bp = addr;
         } else {
-            sprintf(result, "breakpoint: 0x%08x", breakpoint);
-            addresult(result);
+            printres("breakpoint 0: 0x%08x", breakpoint0);
+            printres("breakpoint 1: 0x%08x", breakpoint1);
         }
     } else if (cmdargv[0][0] == 'c' && cmdargv[0][1] == 'p') {
       if (argc != 3) {
-          sprintf(result, "%s", "format is cp addr string");
-          addresult(result);
+          printres("%s", "format is cp addr string");
       }
       else {
           int addr = number(cmdargv[1]);
           if (addr == -1 || addr > MEM_SIZE_WORDS-mem_list_len) {
-             sprintf(result, "%s", "invalid addr on cp command.");
-              addresult(result);
+             printres("%s", "invalid addr on cp command.");
           }
           else { // TODO Update to be cp 0x100 "Gusty Cooper"  New is put string in "" 
               char chars[64] = {0}; 
@@ -362,12 +368,10 @@ int do_cmd(int argc, char **cmdargv) {
       } 
     } else if (cmdargv[0][0] == '0' && cmdargv[0][1] == 'x' ) {
         int val = (int)strtol(&cmdargv[0][2], NULL, 16);
-        sprintf(result, "decimal: %d", val);
-        addresult(result);
+        printres("decimal: %d", val);
     } else if (cmdargv[0][0] == '0' && cmdargv[0][1] == 'd' ) {
         int val = (int)strtol(&cmdargv[0][2], NULL, 10);
-        sprintf(result, "hex: 0x%x", val);
-        addresult(result);
+        printres("hex: 0x%x", val);
     } else if (cmdargv[0][0] == 'y') { // show symbols
         dictshow();
     } else if (cmdargv[0][0] == '.') {
@@ -386,15 +390,13 @@ int do_cmd(int argc, char **cmdargv) {
         retval = 0;
     }
     else {
-        sprintf(result, "%s", "Invalid command.");
-        addresult(result);
+        printres("%s", "Invalid command.");
     }
     return retval;
 }
 
 void do_script(char *scriptfilename) {
-    sprintf(result, "< redirect from script. file: %s\n", scriptfilename);
-    addresult(result);
+    printres("< redirect from script. file: %s\n", scriptfilename);
     cmdargv[0] = ""; // prevent seg fault when first cmd is empty line
     FILE *fp = fopen(scriptfilename, "r");
     if (fp != NULL) {
@@ -477,14 +479,10 @@ int process_args(int argc, char **argv) {
     }
     argc -= optind;
     argv += optind;
-    sprintf(result, "load os: %d", load_os);
-    addresult(result);
-    sprintf(result, "os filename: %s", osfilename);
-    addresult(result);
-    sprintf(result, ".o filename: %s", argv[0]);
-    addresult(result);
-    sprintf(result, "scriptfilename: %s", scriptfilename);
-    addresult(result);
+    printres("load os: %d", load_os);
+    printres("os filename: %s", osfilename);
+    printres(".o filename: %s", argv[0]);
+    printres("scriptfilename: %s", scriptfilename);
     if(!argv[0]) {
         fprintf(stderr, "%s optind: %d argc: %d\n", "Wrong number of arguments", optind, argc);
         return -1;
@@ -507,8 +505,7 @@ int process_args(int argc, char **argv) {
         return -1;
     }
     fclose(file);
-    sprintf(result, "loading %s", argv[0]);
-    addresult(result);
+    printres("loading %s", argv[0]);
     load_memory(argv[0]);
     if (use_script) {
         do_script(scriptfilename);

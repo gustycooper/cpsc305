@@ -2,9 +2,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <sys/stat.h>
+#include <libgen.h>
+#include <fcntl.h>
 #include "dict.h"
 #include "fsms.h"
 #include "chasm_types.h"
+#include "charmopcodes.h"
 
 /* enums, structs, and array ins[]
  * chasm types are found in the file chasm_types.h. The types are the following.
@@ -43,27 +47,30 @@ struct inst_info ins[] = {
     {0x727473, "str", str, ldrstr, 0x00000030}, {0x627473, "stb", stb, ldrstr, 0x00000040}, 
     {0x646461, "add", add, arilog, 0x00000050}, {0x627573, "sub", sub, arilog, 0x00000051}, 
     {0x6c756d, "mul", mul, arilog, 0x00000052}, {0x766964, "div", dIv, arilog, 0x00000053}, 
-    {0x646e61, "and", and, arilog, 0x00000054}, {0x72726f, "orr", orr, arilog, 0x00000055}, 
-    {0x726f65, "eor", eor, arilog, 0x00000056}, {0x636461, "adc", adc, arilog, 0x00000057}, 
-    {0x636273, "sbc", sbc, arilog, 0x00000058}, {0x666461, "adf", adf, arilog, 0x00000059}, 
-    {0x666273, "sbf", sbf, arilog, 0x0000005a}, {0x66756d, "muf", muf, arilog, 0x0000005b}, 
-    {0x666964, "dif", dif, arilog, 0x0000005c}, {0x696461, "adi", adi, arilog, 0x0000005d}, 
-    {0x696273, "sbi", sbi, arilog, 0x0000005e}, {0x766f6d, "mov", mov, movcmp, 0x00000000}, 
-    {0x61766d, "mva", mva, movcmp, 0x00000001}, {0x706d63, "cmp", cmp, movcmp, 0x00000002}, 
-    {0x747374, "tst", tst, movcmp, 0x00000003}, {0x716574, "teq", teq, movcmp, 0x00000004}, 
-    {0x666873, "shf", shf, movcmp, 0x00000005}, {0x616873, "sha", sha, movcmp, 0x00000006}, 
-    {0x746f72, "rot", rot, movcmp, 0x00000007}, {0x6c6162, "bal", bal, branch, 0x00000000}, 
-    {0x716562, "beq", beq, branch, 0x00000001}, {0x656e62, "bne", bne, branch, 0x00000002}, 
-    {0x746c62, "blt", blt, branch, 0x00000003}, {0x656c62, "ble", ble, branch, 0x00000004}, 
-    {0x746762, "bgt", bgt, branch, 0x00000005}, {0x656762, "bge", bge, branch, 0x00000006}, 
-    {0x726c62, "blr", blr, branch, 0x00000007}, {0x72656b, "ker", ker, miscos, 0x000000b0},
-    {0x677273, "srg", srg, miscos, 0x000000b1}, {0x696f69, "ioi", ioi, miscos, 0x000000b2},
+    {0x646f6d, "mod", mod, arilog, 0x00000054}, {0x646e61, "and", and, arilog, 0x00000055}, 
+    {0x72726f, "orr", orr, arilog, 0x00000056}, {0x726f65, "eor", eor, arilog, 0x00000057}, 
+    {0x636461, "adc", adc, arilog, 0x00000058}, {0x636273, "sbc", sbc, arilog, 0x00000059}, 
+    {0x666461, "adf", adf, arilog, 0x0000005a}, {0x667573, "suf", suf, arilog, 0x0000005b}, 
+    {0x66756d, "muf", muf, arilog, 0x0000005c}, {0x666964, "dif", dif, arilog, 0x0000005d}, 
+    {0x766f6d, "mov", mov, movcmp, 0x00000000}, {0x61766d, "mva", mva, movcmp, 0x00000001}, 
+    {0x706d63, "cmp", cmp, movcmp, 0x00000002}, {0x747374, "tst", tst, movcmp, 0x00000003}, 
+    {0x716574, "teq", teq, movcmp, 0x00000004}, {0x666873, "shf", shf, movcmp, 0x00000005}, 
+    {0x616873, "sha", sha, movcmp, 0x00000006}, {0x746f72, "rot", rot, movcmp, 0x00000007}, 
+    {0x656e6f, "one", one, movcmp, 0x00000008}, {0x697466, "fti", fti, movcmp, 0x00000009}, 
+    {0x667469, "itf", itf, movcmp, 0x0000000a}, {0x666d63, "cmf", cmf, movcmp, 0x0000000b}, 
+    {0x6c6162, "bal", bal, branch, 0x00000000}, {0x716562, "beq", beq, branch, 0x00000001}, 
+    {0x656e62, "bne", bne, branch, 0x00000002}, {0x746c62, "blt", blt, branch, 0x00000003}, 
+    {0x656c62, "ble", ble, branch, 0x00000004}, {0x746762, "bgt", bgt, branch, 0x00000005}, 
+    {0x656762, "bge", bge, branch, 0x00000006}, {0x726c62, "blr", blr, branch, 0x00000007}, 
+    {0x72656b, "ker", ker, miscos, 0x000000c0}, {0x677273, "srg", srg, miscos, 0x000000c1}, 
+    {0x696f69, "ioi", ioi, miscos, 0x000000c2}, {0x696461, "adi", adi, arilog, 0x00000050}, 
+    {0x696273, "sbi", sbi, arilog, 0x00000051},
 };
 
 char *toks_t_str[] = { "data", "text", "label", "string", "inst", "comment",
                         "reg", "comma", "number", "leftbrack", "rightbrack", "exclam", "ident", "err", "endd" };
 
-#define MAX_LINE 100        // maximum length of asm prog line
+#define MAX_LINE 128        // maximum length of asm prog line
 #define MAX_TOKENS 15       // maximum number of tokens on asm program line
 #define MAX_PROG_LINES 2000 // maximum number of lines in an asm program
 
@@ -289,8 +296,23 @@ void addrsymopcode() {
                 toks[i].instopcd = isinst(toks[i]);
                 if (toks[i].instopcd < 0)
                     toks[i].linetype = err;
-                if (toks[i].instopcd >= 0x50 && toks[i].instopcd <= 0x5c && toks[i].toks[5].toktype != reg)
-                    toks[i].linetype = err;
+               /*
+                Arithmetic logic instructions can have op2 as a register or a 16-bit 2's complement immediate.
+                add r1, r2, r3  // 3 register operands
+                add r1, r2, 3   // op2 is the number 3
+                Parsing to this point has all opcodes as those for 3 register operands.
+                At this point we update the opcode for instructions that have op2 as an immediate
+                */
+                if (toks[i].instcate == arilog) { // arithmetic logic instruction
+                    if (toks[i].toks[5].toktype == reg || toks[i].toks[5].toktype == number) {
+                        if (toks[i].toks[5].toktype == number) { // op2 is an immediate
+                            toks[i].instopcd &= 0x0f;  // convert instruction from 0x5? to 0x6?
+                            toks[i].instopcd |= 0x60;
+                        }
+                    }
+                    else
+                        toks[i].linetype = err;
+                }
             }
         }
         else if (toks[i].linetype == string && toks[i].toks[1].toktype == comment) {
@@ -370,30 +392,30 @@ void generatecode() {
             case ldrstr:
               rd = toks[i].toks[1].tokv;
               switch (opcode & 0xf) {
-                case 0: // ldr rd, addr
+                case ADDR: // ldr rd, addr
                     imm = toks[i].toks[3].tokv & 0xfffff;
                     instr = opcode << 24 | rd << 20 | imm;
                     break;
-                case 1: // ldr rd, [rm]
+                case BASE: // ldr rd, [rm]
                     rm = toks[i].toks[4].tokv;
                     instr = opcode << 24 | rd << 20 | rm << 16;
                     break;
-                case 2: case 4: // ldr rd, [rm, #3] and ldr rd, [rm, #3]!
+                case BASE_OFF: case PREINC_OFF: // ldr rd, [rm, #3] and ldr rd, [rm, #3]!
                     rm = toks[i].toks[4].tokv;
                     imm = toks[i].toks[6].tokv & 0xffff;
                     instr = opcode << 24 | rd << 20 | rm << 16 | imm;
                     break;
-                case 3: case 5: // ldr rd, [rm, rn] and ldr rd, [rm, rn]!
+                case BASE_REG: case PREINC_REG: // ldr rd, [rm, rn] and ldr rd, [rm, rn]!
                     rm = toks[i].toks[4].tokv;
                     rn = toks[i].toks[6].tokv;
                     instr = opcode << 24 | rd << 20 | rm << 16 | rn << 12;
                     break;
-                case 6: // ldr rd, [rm], #3
+                case POSTINC_OFF: // ldr rd, [rm], #3
                     rm = toks[i].toks[4].tokv;
                     imm = toks[i].toks[7].tokv & 0xffff;
                     instr = opcode << 24 | rd << 20 | rm << 16 | imm;
                     break;
-                case 7: // ldr rd, [rm], rn
+                case POSTINC_REG: // ldr rd, [rm], rn
                     rm = toks[i].toks[4].tokv;
                     rn = toks[i].toks[7].tokv;
                     instr = opcode << 24 | rd << 20 | rm << 16 | rn << 12;
@@ -412,7 +434,7 @@ void generatecode() {
               rd = toks[i].toks[1].tokv;
               rm = toks[i].toks[3].tokv;
               rn = toks[i].toks[5].tokv;
-              if (opcode >= 0x50 && opcode <= 0x5c)
+              if (opcode >> 4 == ADD_RD_RM_RN)
                   instr = opcode << 24 | rd << 20 | rm << 16 | rn << 12;
               else {
                   imm = toks[i].toks[5].tokv & 0xffff;
@@ -424,12 +446,12 @@ void generatecode() {
                   printf("0x%08x\n", instr);
               break;
             case movcmp:
-              if (opcode >> 4 == 6) { // mov r,r
+              if (opcode >> 4 == MOV_RD_RM) { // mov r,r -> 0x70 for r,r and 0x80 for r, #n
                   rd = toks[i].toks[1].tokv;
                   rm = toks[i].toks[3].tokv;
                   instr = opcode << 24 | rd << 20 | rm << 16;
               }
-              else {                  // mov r,#n
+              else {                  // mov r,#n -> 0x70 for r,r and 0x80 for r, #n
                   rd = toks[i].toks[1].tokv;
                   imm = toks[i].toks[3].tokv & 0xfffff;
                   instr = opcode << 24 | rd << 20 | imm;
@@ -440,15 +462,24 @@ void generatecode() {
                   printf("0x%08x\n", instr);
               break;
             case branch:
-              if (opcode >> 4 == 9) { // bal [r]
+            /*
+             branches have three opcodes: 0x9?, 0xa?, and 0xb?.
+             The upper 4-bits of opcode determines the dest, which can be label, [r], or !label. For example,
+             bal label  has opcode 0x90
+             bal [r0]   has opcode 0xa0
+             bal !label has opcode 0xb0
+             The bottom 4-bits of opcode determines bal, beq, bne, blt, ble, bgt, bge, and blt
+             The following code examines the upper 4-bits of the opcode to determine dest format.
+             */
+              if (opcode >> 4 == B_REG) { // bal [r]
                   rd = toks[i].toks[2].tokv;
                   instr = opcode << 24 | rd << 20;
               }
-              else if (opcode >> 4 == 8) { // bal addr
+              else if (opcode >> 4 == B_ADDR) { // bal addr
                   imm = toks[i].toks[1].tokv & 0xfffff;
                   instr = opcode << 24 |  imm;
               }
-              else { // bal !addr - label is in toks[2], ! is in toks[1]
+              else { // B_REL: bal !addr - label is in toks[2], ! is in toks[1]
                   int offset = toks[i].toks[2].tokv - toks[i].address;
                   imm = offset & 0xfffff;
                   instr = opcode << 24 |  imm;
@@ -499,7 +530,7 @@ void generatecode() {
         else if (toks[i].linetype == text || toks[i].linetype == data) {
             printf("%s", toks[i].toks[0].tok_str);
             if (toks[i].numtoks >= 3) // .text 100 - 3 accomodates endd token
-                printf(" %d", toks[i].toks[1].tokv);
+                printf(" 0x%x", toks[i].toks[1].tokv);
             printf("\n");
         }
      }
@@ -520,8 +551,22 @@ void generatelisting() {
 }
 
 /*
+  $ chasm code.s : asm code.s into code.o
+  $ chasm -v code.s : asm code.s into code.o, verbose mode
+  $ chasm -y code.s : asm code.s into code.o, omit symbols from .o
+  $ chasm -lfile.txt code.s : asm code.s into code.o, generate listing file.txt
+  The long versions of the options are invoked a la 
+  $ chasm -verbose code.s
+ */
+static struct option long_options[] = {
+  {"verbose",no_argument,       0,  'v' },
+  {"symbol", no_argument,       0,  'y' },
+  {"list",   required_argument, 0,  'l' },
+  {0,        0,                 0,   0  }
+};
+
+/*
  get_opts - called to process command line options
- See 16CPCS405 > Labs > FileProject > utilities > hexdump.c for code sample with opts and value
  input
   count - copy of argc
   args  - copy of argv
@@ -531,9 +576,8 @@ void generatelisting() {
   return of non 0 is index in argv of assembly file name
  */
 int get_opts(int count, char *args[]) {
-    int opt, good = 1;
-    while (good && (opt = getopt(count, args, "l:vy")) != -1) {
-        printf("opt: %c\n", opt);
+    int opt, good = 1, long_index;
+    while (good && (opt = getopt_long(count, args, "l:vy", long_options, &long_index)) != -1) {
         switch (opt) {
             case 'l':
                 listing = strdup(optarg);
@@ -544,18 +588,10 @@ int get_opts(int count, char *args[]) {
             case 'y':
                 symbols = 0;
                 break;
-            case ':':
-                fprintf(stderr, "option missing value\n");
-                break;
-            case '?':
-               if (optopt == 'l')
-                    fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-                //if (isprint(optopt))
-                //    fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-                else
-                   fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+            default:
+                fprintf(stderr, "Invalid invocation.\n");
                 good = 0;
-                break;
+                break;    
         }
     }
     if(good && optind > count-1) {
@@ -585,16 +621,34 @@ int get_opts(int count, char *args[]) {
 int main(int argc, char **argv) {
     int optind = get_opts(argc, argv);
     if (!optind) {
-        fprintf(stderr, "Bad chasm command - probably missing file for -l\n");
+        fprintf(stderr, "Bad chasm command invocation!\n");
         return -1;
     }
 
+    char *input = argv[optind];
+    char *base = basename(strdup(input));
+    char *dot = strrchr(base, '.');
+    if (dot)
+        *dot = '\0';
+    char *output = malloc(256);
+    strcpy(output, base);
+    strcat(output, ".o");
+    if (verbose)
+        fprintf(stderr, "input: %s, output: %s\n", input, output);
     // An open-do-close pattern to process the assembly file
     FILE *fp;
-    if ((fp = fopen(argv[optind], "r")) == NULL) {
-        fprintf(stderr, "File %s not found!\n", argv[optind]);
+    if ((fp = fopen(input, "r")) == NULL) {
+        fprintf(stderr, "File %s not found!\n", input);
         return -1;
     }
+    // chasm writes to stdout. dup2 output to stdout
+    int fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int dup2stat = dup2(fd, 1);
+    if (fd == -1 || dup2stat == -1) {
+        fprintf(stderr, "File %s not created!\n", output);
+        return -1;
+    }
+    close(fd);
     // Loop - reads line, tokenizes line in tok, saves tok in array toks
     while (fgets(buf, MAX_LINE, fp)) {
         buf[strcspn(buf, "\n")] = '\0';

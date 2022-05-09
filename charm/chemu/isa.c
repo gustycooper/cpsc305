@@ -4,6 +4,7 @@
 #include <string.h>
 #include "cpu.h"
 #include "isa.h"
+#include "charmopcodes.h"
 
 /*
  * Charm instructions have an 8-bit opcode field, which yields 256 instructions
@@ -53,68 +54,89 @@ char *insts[] = {
 /* 0x51 */  "sub rd, rm, rn",
 /* 0x52 */  "mul rd, rm, rn",
 /* 0x53 */  "div rd, rm, rn",
-/* 0x54 */  "and rd, rm, rn",
-/* 0x55 */  "orr rd, rm, rn",
-/* 0x56 */  "eor rd, rm, rn",
-/* 0x57 */  "adc rd, rm, rn",
-/* 0x58 */  "sbc rd, rm, rn",
-/* 0x59 */  "adf rd, rm, rn",
-/* 0x5a */  "sbf rd, rm, rn",
-/* 0x5b */  "muf rd, rm, rn",
-/* 0x5c */  "dif rd, rm, rn",
-/* 0x5d */  "adi rd, rm, #imm",
-/* 0x5e */  "sbi rd, rm, #imm",
-            0, // opcodes 0x5d-0x5f not used
-/* 0x60 */  "mov rd, rm",
-/* 0x61 */  "mva rd, rm",
-/* 0x62 */  "cmp rd, rm",
-/* 0x63 */  "tst rd, rm",
-/* 0x64 */  "teq rd, rm",
-/* 0x65 */  "shf rd, rm",
-/* 0x66 */  "sha rd, rm",
-/* 0x67 */  "rot rd, rm",
-            0,0,0,0,0,0,0,0, // opcodes 0x68-0x6f not used
-/* 0x70 */  "mov rd, #imm",
-/* 0x71 */  "mva rd, #imm",
-/* 0x72 */  "cmp rd, #imm",
-/* 0x73 */  "tst rd, #imm",
-/* 0x74 */  "teq rd, #imm",
-/* 0x75 */  "shf rd, #imm",
-/* 0x76 */  "sha rd, #imm",
-/* 0x77 */  "rot rd, #imm",
-            0,0,0,0,0,0,0,0, // opcodes 0x78-0x7f not used
-/* 0x80 */  "bal address",
-/* 0x81 */  "beq address",
-/* 0x82 */  "bne address",
-/* 0x83 */  "blt address",
-/* 0x84 */  "ble address",
-/* 0x85 */  "bgt address",
-/* 0x86 */  "bge address",
-/* 0x87 */  "blr address",
+/* 0x54 */  "mod rd, rm, rn",
+/* 0x55 */  "and rd, rm, rn",
+/* 0x56 */  "orr rd, rm, rn",
+/* 0x57 */  "eor rd, rm, rn",
+/* 0x58 */  "adc rd, rm, rn",
+/* 0x59 */  "sbc rd, rm, rn",
+/* 0x5a */  "adf rd, rm, rn",
+/* 0x5b */  "suf rd, rm, rn",
+/* 0x5c */  "muf rd, rm, rn",
+/* 0x5d */  "dif rd, rm, rn",
+            0,0, // opcodes 0x5e-0x5f not used
+/* 0x60 */  "add rd, rm, #imm",
+/* 0x61 */  "sub rd, rm, #imm",
+/* 0x62 */  "mul rd, rm, #imm",
+/* 0x63 */  "div rd, rm, #imm",
+/* 0x64 */  "mod rd, rm, #imm",
+/* 0x65 */  "and rd, rm, #imm",
+/* 0x66 */  "orr rd, rm, #imm",
+/* 0x67 */  "eor rd, rm, #imm",
+/* 0x68 */  "adc rd, rm, #imm",
+/* 0x69 */  "sbc rd, rm, #imm",
+/* 0x6a */  "adf rd, rm, #imm",
+/* 0x6b */  "suf rd, rm, #imm",
+/* 0x6c */  "muf rd, rm, #imm",
+/* 0x6d */  "dif rd, rm, #imm",
+            0,0, // opcodes 0x6e-0x6f not used
+/* 0x70 */  "mov rd, rm",
+/* 0x71 */  "mva rd, rm",
+/* 0x72 */  "cmp rd, rm",
+/* 0x73 */  "tst rd, rm",
+/* 0x74 */  "teq rd, rm",
+/* 0x75 */  "shf rd, rm",
+/* 0x76 */  "sha rd, rm",
+/* 0x77 */  "rot rd, rm",
+/* 0x78 */  "one rd, rm",
+/* 0x79 */  "fti rd, rm",
+/* 0x7a */  "itf rd, rm",
+/* 0x7b */  "cmf rd, rm",
+            0,0,0,0, // opcodes 0x7c-0x7f not used
+/* 0x80 */  "mov rd, #imm",
+/* 0x81 */  "mva rd, #imm",
+/* 0x82 */  "cmp rd, #imm",
+/* 0x83 */  "tst rd, #imm",
+/* 0x84 */  "teq rd, #imm",
+/* 0x85 */  "shf rd, #imm",
+/* 0x86 */  "sha rd, #imm",
+/* 0x87 */  "rot rd, #imm",
+/* 0x88 */  "one rd, #imm",
+/* 0x89 */  "fti rd, #imm",
+/* 0x8a */  "itf rd, #imm",
+/* 0x8b */  "cmf rd, #imm",
+            0,0,0,0, // opcodes 0x8c-0x8f not used
+/* 0x90 */  "bal address",
+/* 0x91 */  "beq address",
+/* 0x92 */  "bne address",
+/* 0x93 */  "blt address",
+/* 0x94 */  "ble address",
+/* 0x95 */  "bgt address",
+/* 0x96 */  "bge address",
+/* 0x97 */  "blr address",
             0,0,0,0,0,0,0,0, // opcodes 0x88-0x8f not used
-/* 0x90 */  "bal [rd]",
-/* 0x91 */  "beq [rd]",
-/* 0x92 */  "bne [rd]",
-/* 0x93 */  "blt [rd]",
-/* 0x94 */  "ble [rd]",
-/* 0x95 */  "bgt [rd]",
-/* 0x96 */  "bge [rd]",
-/* 0x97 */  "blr [rd]",
+/* 0xa0 */  "bal [rd]",
+/* 0xa1 */  "beq [rd]",
+/* 0xa2 */  "bne [rd]",
+/* 0xa3 */  "blt [rd]",
+/* 0xa4 */  "ble [rd]",
+/* 0xa5 */  "bgt [rd]",
+/* 0xa6 */  "bge [rd]",
+/* 0xa7 */  "blr [rd]",
             0,0,0,0,0,0,0,0, // opcodes 0x98-0x9f not used
-/* 0xa0 */  "bal off",
-/* 0xa1 */  "beq off",
-/* 0xa2 */  "bne off",
-/* 0xa3 */  "blt off",
-/* 0xa4 */  "ble off",
-/* 0xa5 */  "bgt off",
-/* 0xa6 */  "bge off",
-/* 0xa7 */  "blr off",
+/* 0xb0 */  "bal off",
+/* 0xb1 */  "beq off",
+/* 0xb2 */  "bne off",
+/* 0xb3 */  "blt off",
+/* 0xb4 */  "ble off",
+/* 0xb5 */  "bgt off",
+/* 0xb6 */  "bge off",
+/* 0xb7 */  "blr off",
             0,0,0,0,0,0,0,0, // opcodes 0xa8-0xaf not used
-/* 0xb0 */  "ker #imm",
-/* 0xb1 */  "srg #imm",
-/* 0xb2 */  "ioi #imm",
-            0,0,0,0,0,0,0,0,0,0,0,0,0,       // opcodes 0xb3-bf not used
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // opcodes 0xc0-cf not used
+/* 0xc0 */  "ker #imm",
+/* 0xc1 */  "srg #imm",
+/* 0xc2 */  "ioi #imm",
+            0,0,0,0,0,0,0,0,0,0,0,0,0,       // opcodes 0xc3-cf not used
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // opcodes 0xd0-df not used
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // opcodes 0xe0-ef not used
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  // opcodes 0xf0-ff not used
@@ -122,8 +144,8 @@ char *insts[] = {
 
 
 static char *ldrstr_strs[] = { "ldr ", "ldb ", "str ", "stb " };
-static char *arilog_strs[] = { "add ", "sub ", "mul ", "div ", "and ", "orr ", "eor ", "adc ", "sbc ", "adf ", "sbf ", "muf ", "dif ", "adi ", "sbi " };
-static char *movcmp_strs[] = { "mov ", "mva ", "cmp ", "tst ", "teq ", "shf ", "sha ", "rot " };
+static char *arilog_strs[] = { "add ", "sub ", "mul ", "div ", "mod ", "and ", "orr ", "eor ", "adc ", "sbc ", "adf ", "suf ", "muf ", "dif ",  };
+static char *movcmp_strs[] = { "mov ", "mva ", "cmp ", "tst ", "teq ", "shf ", "sha ", "rot ", "one ", "fti ", "itf ", "cmf " };
 static char *branch_strs[] = { "bal ", "beq ", "bne ", "blt ", "ble ", "bgt ", "bge ", "blr " };
 static char *kernel_strs[] = { "ker ", "srg ", "ioi " };
 static char disassembled[100]; // holds a disassembled instruction
@@ -144,33 +166,33 @@ char *disassemble(unsigned int inst) {
 
     char buf[25];
     switch (d->opcode >> 4 & 0xf) {
-      case 1: case 2: case 3: case 4: // ldr, ldb, str, stb
+      case LDR: case LDB: case STR: case STB: // ldr, ldb, str, stb
         p = strcat(p, ldrstr_strs[(d->opcode >> 4 & 0xf)-1]);
         sprintf(buf, "r%d, ", d->rd);
         p = strcat(p, buf);
         switch (d->opcode & 0xf) {
-          case 0:
+          case ADDR:
             sprintf(buf, "0x%x", d->address);
             break;
-          case 1:
+          case BASE:
             sprintf(buf, "[r%d]", d->rm);
             break;
-          case 2:
+          case BASE_OFF:
             sprintf(buf, "[r%d, #%d]", d->rm, d->immediate16);
             break;
-          case 3:
+          case BASE_REG:
             sprintf(buf, "[r%d, r%d]", d->rm, d->rn);
             break;
-          case 4:
+          case PREINC_OFF:
             sprintf(buf, "[r%d, #%d]!", d->rm, d->immediate16);
             break;
-          case 5:
+          case PREINC_REG:
             sprintf(buf, "[r%d, r%d]!", d->rm, d->rn);
             break;
-          case 6:
+          case POSTINC_OFF:
             sprintf(buf, "[r%d], #%d", d->rm, d->immediate16);
             break;
-          case 7:
+          case POSTINC_REG:
             sprintf(buf, "[r%d], r%d", d->rm, d->rn);
             break;
           default:
@@ -179,33 +201,33 @@ char *disassemble(unsigned int inst) {
         }
         p = strcat(p, buf);
         break;
-      case 5: // arilog inst
+      case ADD_RD_RM_RN: case ADD_RD_RM_IMM: // arilog inst
         p = strcat(p, arilog_strs[d->opcode & 0xf]);
-        if (d->opcode >= 0x50 && d->opcode <= 0x5c)
+        if (d->opcode >= 0x50 && d->opcode <= 0x5d)
             sprintf(buf, "r%d, r%d, r%d", d->rd, d->rm, d->rn);
         else
             sprintf(buf, "r%d, r%d, #%d", d->rd, d->rm, d->immediate16);
         p = strcat(p, buf);
         break;
-      case 6: case 7: // movcmp inst
+      case MOV_RD_RM: case MOV_RD_IMM: // movcmp inst
         p = strcat(p, movcmp_strs[d->opcode & 0xf]);
-        if ((d->opcode >> 4 & 0xf) == 6) // rd, rm
+        if ((d->opcode >> 4 & 0xf) == 7) // rd, rm
             sprintf(buf, "r%d, r%d", d->rd, d->rm);
         else // rd, #imm
             sprintf(buf, "r%d, #%d", d->rd, d->immediate16);
         p = strcat(p, buf);
         break;
-      case 8: case 9: case 10: // branch inst
+      case B_ADDR: case B_REG: case B_REL: // branch inst
         p = strcat(p, branch_strs[d->opcode & 0xf]);
-        if ((d->opcode >> 4 & 0xf) == 8) // bal address
+        if ((d->opcode >> 4 & 0xf) == 9) // bal address
             sprintf(buf, "#%08x", d->address);
-        else if ((d->opcode >> 4 & 0xf) == 7) // bal [rd]
+        else if ((d->opcode >> 4 & 0xf) == 10) // bal [rd]
             sprintf(buf, "[r%d]", d->rd);
         else // bal offset
             sprintf(buf, "#%d", d->immediate20);
         p = strcat(p, buf);
         break;
-      case 11: // ker innstruction
+      case K_INST: // ker innstruction
         p = strcat(p, kernel_strs[d->opcode & 0xf]);
         sprintf(buf, "#%08x", d->address);
         p = strcat(p, buf);

@@ -250,6 +250,18 @@ void addresult(char *res) {
 #endif
     resi++;
 }
+
+// printres has variable arguments just like fprintf
+__attribute__((format(printf, 1, 2)))
+void printres(char *fmt, ...) {
+    char res[80];
+    va_list ap;
+    va_start(ap, fmt);
+    vsprintf(res, fmt, ap);
+    va_end(ap);
+    addresult(res);
+}
+
 static const char *reswinln = "%s";
 
 #ifdef NCURSES
@@ -383,9 +395,7 @@ int main(int argc, char **argv) {
     mvwaddstr(cmdwin, 1, 1, "                     Commands                      ");
     updatecmdwin(cmdwin, "start");
 
-    char temp[80];
-    sprintf(temp, "Terminal - LINES: %d, COLS: %d", LINES, COLS);
-    addresult(temp);
+    printres("Terminal - LINES: %d, COLS: %d", LINES, COLS);
 
     /*  Create result window */
     reswin = subwin(mainwin, RESHGT, RESWID, RESLIN, RESCOL);

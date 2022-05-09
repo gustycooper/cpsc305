@@ -8,6 +8,7 @@
 #include "bit_functions.h"
 #include "cpu.h"
 #include "isa.h"
+#include "charmopcodes.h"
 
 extern char memory[];
 void addresult(char *res);
@@ -65,26 +66,28 @@ void pipeline() {
     int address = registers[PC], inst, branch = 0, baddress;
     for (int i = 0; i < INSTHIST+1; i++) {
         system_bus(address, &inst, READ);
+        int n;
         if (verbose_cpu)
-            sprintf(instresult, "0x%08x: 0x%08x: %s", address, inst, disassemble(inst));
+            n = sprintf(instresult, "0x%08x: 0x%08x: %s", address, inst, disassemble(inst));
         else
-            sprintf(instresult, "0x%08x: %s", address, disassemble(inst));
+            n = sprintf(instresult, "0x%08x: %s", address, disassemble(inst));
         if (branch) { // branch displays both paths of branch
             char branresult[128];
             system_bus(baddress, &inst, READ);
+            strncat(instresult, "               ", 30 - n);
             if (verbose_cpu)
                 sprintf(branresult, "%s  0x%08x: 0x%08x: %s", instresult, baddress, inst, disassemble(inst));
             else
                 sprintf(branresult, "%s  0x%08x: %s", instresult, baddress, disassemble(inst));
             strncpy(instresult, branresult, 80);
-            addinst(instresult);
+            //addinst(instresult);
             baddress += 4;
         }
         if (i == 0) {
             strcat(instresult, "<- pc");
             //printf(" <- pc");
             int opcodeupper = (inst >> 28) & 0xf; // TODO - should use decode() for this
-            if (opcodeupper >= 8 && opcodeupper <= 10) {
+            if (opcodeupper >= B_ADDR && opcodeupper <= B_REL) {
                 branch = 1;
                 baddress = inst & 0xfffff; // TODO - get address from reg, etc.
             }
@@ -221,8 +224,8 @@ void chemuioi(int op2) {
                         float f;
                         int i;
                     } u;
-                    //u.i = registers[2];
-                    u.i = 0x3fa00000;
+                    u.i = registers[2];
+                    //u.i = 0x3fa00000; // 1.25 - original used for testing
                     snprintf(temp, 80, &memory[registers[1]], u.f);
                 } else
                     snprintf(temp, 80, &memory[registers[1]], &memory[registers[2]]);
@@ -253,8 +256,8 @@ void chemuioi(int op2) {
 // static int breakpoints[NUM_BREAKPOINTS]; // allow 2 break points
 
 // global breakpoint - main() changes this via b command
-int breakpoint = -1; // >0 is address of a breakpoint
-static int breakpointexecuted = 0;
+int breakpoint0 = -1, breakpoint1 = -1; // >0 is address of a breakpoint
+static int breakpoint0executed = 0, breakpoint1executed;
 static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
 
 /******************************************************************
@@ -266,21 +269,26 @@ static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
  ** return 4 when memory access error                            **
  ** return -1 for illegal instruction                            **
  ******************************************************************/
-int step() {
+enum stepret step() {
     total_steps++;
     memaddr_changed = 0; // state of changed memory
 /******************************************************************
  ****************************  FETCH  *****************************
  ******************************************************************/
     int pc = registers[PC];
-    if (pc == breakpoint && !breakpointexecuted) {
-        breakpointexecuted = 1;
-        return 1;
+    if (pc == breakpoint0 && !breakpoint0executed) {
+        breakpoint0executed = 1;
+        return BREAKPOINT;
     }
-    breakpointexecuted = 0;
+    breakpoint1executed = 0;
+    if (pc == breakpoint1 && !breakpoint1executed) {
+        breakpoint1executed = 1;
+        return BREAKPOINT;
+    }
+    breakpoint1executed = 0;
     int inst; 
     if (system_bus(pc, &inst, READ))
-        return 4;
+        return MEMERROR;
     insthist[insthist_i].addr = pc;
     insthist[insthist_i].inst = inst;
     insthist_i = (insthist_i + 1) % INSTHIST;
@@ -294,59 +302,59 @@ int step() {
             printf("pc: 0x%08x, inst: 0x%08x\n", registers[PC], inst);
         }
         registers[PC] = pc;
-        return -1;
+        return ILLEGALINST;
 
     }
     if (verbose_cpu)
         printf("pre-step  : cpsr: 0x%08x, pc: 0x%08x, inst: 0x%08x, %s\n", cpsr, registers[PC], inst, disassemble(inst));
     int address = 0, control;
-    int retval = 0; // normal return
+    enum stepret retval = NORMAL; // normal return
     int opcode = d->opcode >> 4 & 0xf; // & 0xf needed due to arithmetic left shift
 /******************************************************************
  ***************************  EXECUTE  ****************************
  ** Each case of the switch statements perform execute           **
  ******************************************************************/
     switch (opcode) {
-      case 1: case 2: case 3: case 4: // ldr, ldb, str, stb
-        if (opcode < 3)
+      case LDR: case LDB: case STR: case STB: // ldr, ldb, str, stb
+        if (opcode < STR)
             control = READ;
         else
             control = WRITE;
         int word = 1; // assume ldr and str, which are 32-bit operations
-        if (opcode == 2 || opcode == 4) // 2 is ldb, 4 is stb
+        if (opcode == LDB || opcode == STB) // 2 is ldb, 4 is stb
             word = 0; // ldb or stb
         switch (d->opcode & 0xf) {
-          case 0:
+          case ADDR:
             address = d->address;
             break;
-          case 1:
+          case BASE:
             address = registers[d->rm];
             break;
-          case 2:
+          case BASE_OFF:
             address = registers[d->rm] + d->immediate16;
             break;
-          case 3:
+          case BASE_REG:
             address = registers[d->rm] + registers[d->rn];
             break;
-          case 4:
+          case PREINC_OFF:
             registers[d->rm] += d->immediate16;
             address = registers[d->rm];
             break;
-          case 5:
+          case PREINC_REG:
             registers[d->rm] += registers[d->rn];
             address = registers[d->rm];
             break;
-          case 6:
+          case POSTINC_OFF:
             address = registers[d->rm];
             registers[d->rm] += d->immediate16;
             break;
-          case 7:
+          case POSTINC_REG:
             address = registers[d->rm];
             registers[d->rm] += registers[d->rn];
             break;
           default:
             printf("bad ldrstr\n");
-            retval = -1;
+            retval = ILLEGALINST;
         }
         unsigned char ldbstb;
         if (control == WRITE) {
@@ -371,81 +379,83 @@ int step() {
                 registers[d->rd] = ldbstb;
         }
         if (mem_access_error)
-            return 4;
+            return MEMERROR;
         pc += 4;
         break;
-      case 5: // arilog inst
+      case ADD_RD_RM_RN: case ADD_RD_RM_IMM:; // arilog ins - 5 is add r1,r2,r3 - 6 is add r1,r2,8
+        int op2;
+        if (opcode == ADD_RD_RM_RN)
+            op2 = registers[d->rn];
+        else
+            op2 = d->immediate16;
         switch (d->opcode & 0xf) {
           float frd, frm, frn;
-          case 0:
-              registers[d->rd] = registers[d->rm] + registers[d->rn];
+          case ADD:
+              registers[d->rd] = registers[d->rm] + op2;
               break;
-          case 1:
-              registers[d->rd] = registers[d->rm] - registers[d->rn];
+          case SUB:
+              registers[d->rd] = registers[d->rm] - op2;
               break;
-          case 2:
-              registers[d->rd] = registers[d->rm] * registers[d->rn];
+          case MUL:
+              registers[d->rd] = registers[d->rm] * op2;
               break;
-          case 3:
-              registers[d->rd] = registers[d->rm] / registers[d->rn]; // TODO check that divisor is 0
+          case DIV:
+              registers[d->rd] = registers[d->rm] / op2; // TODO check that divisor is 0
               break;
-          case 4:
-              registers[d->rd] = registers[d->rm] & registers[d->rn];
+          case MOD:
+              registers[d->rd] = registers[d->rm] % op2;
               break;
-          case 5:
-              registers[d->rd] = registers[d->rm] | registers[d->rn];
+          case AND:
+              registers[d->rd] = registers[d->rm] & op2;
               break;
-          case 6:
-              registers[d->rd] = registers[d->rm] ^ registers[d->rn];
+          case ORR:
+              registers[d->rd] = registers[d->rm] | op2;
               break;
-          case 7: // TODO fix so it does add with carry
-              registers[d->rd] = registers[d->rm] + registers[d->rn];
+          case EOR:
+              registers[d->rd] = registers[d->rm] ^ op2;
               break;
-          case 8: // TODO fix so it does sub with carry
-              registers[d->rd] = registers[d->rm] - registers[d->rn];
+          case ADC: // TODO fix so it does add with carry
+              registers[d->rd] = registers[d->rm] + op2;
               break;
-          case 9:
-              frm = (float)registers[d->rm];
-              frn = (float)registers[d->rn];
+          case SBC: // TODO fix so it does sub with carry
+              registers[d->rd] = registers[d->rm] - op2;
+              break;
+          case ADF:
+              memcpy(&frm, &registers[d->rm], 4);
+              memcpy(&frn, &op2, 4);
               frd = frm + frn;
-              registers[d->rd] = (int)frd;
+              memcpy(&registers[d->rd], &frd, 4);
               break;
-          case 10:
-              frm = (float)registers[d->rm];
-              frn = (float)registers[d->rn];
+          case SUF:
+              memcpy(&frm, &registers[d->rm], 4);
+              memcpy(&frn, &op2, 4);
               frd = frm - frn;
-              registers[d->rd] = (int)frd;
+              memcpy(&registers[d->rd], &frd, 4);
               break;
-          case 11:
-              frm = (float)registers[d->rm];
-              frn = (float)registers[d->rn];
+          case MUF:
+              memcpy(&frm, &registers[d->rm], 4);
+              memcpy(&frn, &op2, 4);
               frd = frm * frn;
-              registers[d->rd] = (int)frd;
+              memcpy(&registers[d->rd], &frd, 4);
               break;
-          case 12:
-              frm = (float)registers[d->rm];
-              frn = (float)registers[d->rn];
+          case DIF:
+              memcpy(&frm, &registers[d->rm], 4);
+              memcpy(&frn, &op2, 4);
               frd = frm / frn;
-              registers[d->rd] = (int)frd;
-              break;
-          case 13:
-              registers[d->rd] = registers[d->rm] + d->immediate16;
-              break;
-          case 14:
-              registers[d->rd] = registers[d->rm] - d->immediate16;
+              memcpy(&registers[d->rd], &frd, 4);
               break;
           default:
             printf("bad arilog\n");
-            retval = -1;
+            retval = ILLEGALINST;
         }
         pc += 4;
         break;
-      case 6: case 7: // movcmp inst
+      case MOV_RD_RM: case MOV_RD_IMM:  // movcmp ins - 7 is cmp r1,r2 - 8 is cmp r1,8
         switch (d->opcode & 0xf) {
-          case 0: case 1:  // mov mva
-            if (opcode == 6) // mov rd, rm or mva rd, rm
+          case MOV: case MVA:  // mov mva
+            if (opcode == MOV_RD_RM) // mov rd, rm or mva rd, rm
                 registers[d->rd] = registers[d->rm];
-            else if (opcode == 7 && ((d->opcode & 0xf) == 1)) // mva rd, #addr
+            else if (opcode == MOV_RD_IMM && ((d->opcode & 0xf) == MVA)) // mva rd, #addr
                 registers[d->rd] = d->address;
             else // mov rd, #imm
                 registers[d->rd] = d->immediate20;
@@ -453,20 +463,20 @@ int step() {
             if (d->rd == 15) // mov r15, rXX
                 pc = registers[PC];
             break;
-          case 2: case 3: case 4:; // cmp, tst teq
+          case CMP: case TST: case TEQ:; // cmp, tst teq
             int val, op2;
-            if (opcode == 6) // rd, rm
+            if (opcode == MOV_RD_RM) // rd, rm
                 op2 = registers[d->rm];
             else // rd, #imm
                 op2 = d->immediate20;
             switch (d->opcode & 0xf) {
-              case 2: // cmp
+              case CMP: // cmp
                 val = registers[d->rd] - op2;
                 break;
-              case 3: // tst
+              case TST: // tst
                 val = registers[d->rd] & op2;
                 break;
-              case 4: // teq
+              case TEQ: // teq
                 val = registers[d->rd] ^ op2;
                 break;
             }
@@ -490,8 +500,8 @@ int step() {
             }
             pc += 4;
             break;
-          case 5: case 6: case 7: // shf, sha, rot
-            if (opcode == 6) // rd, rm
+          case SHF: case SHA: case ROT: // shf, sha, rot
+            if (opcode == MOV_RD_RM) // rd, rm
                 op2 = registers[d->rm];
             else // rd, #imm
                 op2 = d->immediate20;
@@ -502,14 +512,14 @@ int step() {
             }
             op2 %= 32; // make shift < 32
             switch (d->opcode & 0xf) {
-              case 5: // shf - logical shift
+              case SHF: // shf - logical shift
                 if (left)
                     registers[d->rd] = registers[d->rd] << op2;
                 else
                     // >> may be arithmetic shift. C standard does not state the type of shift
                     registers[d->rd] = (int)((unsigned int)registers[d->rd] >> op2);
                 break;
-              case 6: // sha - arithmetic shift
+              case SHA: // sha - arithmetic shift
                 if (left) // left shift, propagate bit 0
                     if (bit_test(registers[d->rd], 0))
                         registers[d->rd] = ~(~registers[d->rd] << op2);
@@ -522,7 +532,7 @@ int step() {
                     else
                         registers[d->rd] = registers[d->rd] >> op2;
                 break;
-              case 7: // rot - rotate
+              case ROT: // rot - rotate
                 if (left)
                     registers[d->rd] = (registers[d->rd] << op2) | 
                                        (int)((unsigned int)registers[d->rd] >> (32 - op2));
@@ -532,67 +542,95 @@ int step() {
             }
             pc += 4;
             break;
+          case ONE: // one
+            if (opcode == MOV_RD_RM) // rd, rm
+                op2 = registers[d->rm];
+            else // rd, #imm
+                op2 = d->immediate20;
+            registers[d->rd] = ~op2;
+            pc += 4;
+            break;
+          case FTI: // fti
+            if (opcode == MOV_RD_RM) // rd, rm
+                op2 = registers[d->rm];
+            else // rd, #imm
+                op2 = d->immediate20;
+            registers[d->rd] = (int)op2;
+            pc += 4;
+            break;
+          case ITF: // itf - HERE - This needs to be rethought
+            if (opcode == MOV_RD_RM) // rd, rm
+                op2 = registers[d->rm];
+            else // rd, #imm
+                op2 = d->immediate20;
+            float f = op2;
+            memcpy(&registers[d->rd], &f, 4);
+            pc += 4;
+            break;
+          case CMF: // cmf - Do we need compare floating point
+            // Just use cmp since it sets CC on rd - op2
+            break;
         }
         break;
-      case 8: case 9: case 10: // branch inst
-        if (opcode == 8)
+      case B_ADDR: case B_REG: case B_REL: // branch inst
+        if (opcode == B_ADDR)
             address = d->address;
-        else if (opcode == 9)
+        else if (opcode == B_REG)
             address = registers[d->rd];
         else
             address = registers[PC] + d->immediate20;
         switch (d->opcode & 0xf) {
-          case 0:
+          case BAL:
               pc = address;
               break;
-          case 1:
+          case BEQ:
               if (bit_test(cpsr, Z))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 2:
+          case BNE:
               if (!bit_test(cpsr, Z))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 4:
+          case BLE:
               if (bit_test(cpsr, Z) || (bit_test(cpsr, N) != bit_test(cpsr, V)))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 3:
+          case BLT:
               if ((bit_test(cpsr, N) != bit_test(cpsr, V)))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 6:
+          case BGE:
               if ((bit_test(cpsr, N) == bit_test(cpsr, V)))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 5:
+          case BGT:
               if (!bit_test(cpsr, Z) && (bit_test(cpsr, N) == bit_test(cpsr, V)))
                   pc = address;
               else
                   pc += 4;
               break;
-          case 7:
+          case BLR:
               registers[LR] = pc + 4;
               pc = address;
               break;
           default:
               printf("Bad Branch Instruction\n");
-              retval = -1;
+              retval = ILLEGALINST;
         }
         break;
-      case 11: // kernel inst
+      case K_INST: // kernel inst
          switch (d->opcode & 0xf) {
-           case 0: // 0xb0 - ker, user to kernel mode
+           case KER: // ker, user to kernel mode
                if (bit_test(cpsr, U) && bit_test(cpsr, OS)) { // user mode and OS loaded
                    registers[0] = d->immediate20;  // ker #imm value to r0
                    registers[LR] = pc + 4;         // return address to LR
@@ -601,10 +639,10 @@ int step() {
                }
                else {
                    printf("Illegal use of ker Instruction\n");
-                   retval = -1;
+                   retval = ILLEGALINST;
                }
                break;
-           case 1: // 0xb1 - srg, status reg instruction
+           case SRG: // srg, status reg instruction
                if (!bit_test(cpsr, U)) { // 0xb1 must be done in kernel mode
                    int bit_pos = d->immediate20 & 0x1f; // 5 bits for 0 to 31
                    if (d->immediate20 >> 5 & 1)
@@ -615,10 +653,10 @@ int step() {
                }
                else {
                    printf("Illegal use of srg Instruction\n");
-                   retval = -1;
+                   retval = ILLEGALINST;
                }
                break;
-           case 2: // 0xb2 - ioi, input output instruction
+           case IOI: // ioi, input output instruction
                // 0xb2 must be done in kernel mode with the OS loaded
                if (!bit_test(cpsr, U) && bit_test(cpsr, OS)) {
                    if (scanfdone) {
@@ -628,14 +666,14 @@ int step() {
                    else {
                        chemuioi(d->immediate20);
                        if (doscanf)
-                           return 2;
+                           return SCANF;
                        else
                            pc += 4;
                    }
                }
                else {
                    printf("Illegal use of ioi Instruction\n");
-                   retval = -1;
+                   retval = ILLEGALINST;
                }
                break;
          }
@@ -650,32 +688,27 @@ int step() {
     return retval;
 }
 
-/******************************************************************
- ***************************  STEP_N  *****************************
- ** step_n() calls step() n times                                **
- ** return values                                                **
- **  return -1 step_n encountered an illegal instruction         **
- **  return 0  step_n stepped all steps                          **
- **  return 1  step_n encountered a breakpoint                   **
- **  return 2  step_n encountered a bal to itself                **
- **  return 3  step_n waiting on input from scanf                **
- **  return 4  step_n encountered memory access error            **
- ******************************************************************/
-int step_n(int n) {
-    int s = 0;
+/*******************************************************************
+ ***************************  STEP_N  ******************************
+ ** step_n() calls step() n times                                 **
+ ** return values                                                 **
+ **  return ILLEGALINST step_n encountered an illegal instruction **
+ **  return NORMAL  step_n stepped all steps                      **
+ **  return BREAKPOINT  step_n encountered a breakpoint           **
+ **  return BALTOSELF  step_n encountered a bal to itself         **
+ **  return SCANF  step_n waiting on input from scanf             **
+ **  return MEMERROR  step_n encountered memory access error      **
+ *******************************************************************/
+enum stepret step_n(int n) {
+    enum stepret s = NORMAL;
     for (int i = 0; i < n; i++) {
         int pc = registers[15];
         s = step();
-        if (s == 1) // 1 means a breakpoint is hit
-            return 1;
-        else if (s == 2) // 2 means waiting on input from scanf
-            return 3;
-        else if (s == 4) // 4 means memory access error
-            return 4;
-        else if (s < 0)
-            return -1;
-        if (registers[15] == pc)
-            return 2;
+        if (registers[15] == pc && s == NORMAL)
+            return BALTOSELF;
+        if (s == NORMAL)
+            continue;
+        return s;
     }
     return s;
 }
