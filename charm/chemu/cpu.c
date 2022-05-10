@@ -257,7 +257,7 @@ void chemuioi(int op2) {
 
 // global breakpoint - main() changes this via b command
 int breakpoint0 = -1, breakpoint1 = -1; // >0 is address of a breakpoint
-static int breakpoint0executed = 0, breakpoint1executed;
+static int breakpoint0executed = 0, breakpoint1executed = 0;
 static int memaddr_changed = 0, memval_before = 0, memval_after = 0;
 
 /******************************************************************
@@ -280,11 +280,11 @@ enum stepret step() {
         breakpoint0executed = 1;
         return BREAKPOINT;
     }
-    breakpoint1executed = 0;
     if (pc == breakpoint1 && !breakpoint1executed) {
         breakpoint1executed = 1;
         return BREAKPOINT;
     }
+    breakpoint0executed = 0;
     breakpoint1executed = 0;
     int inst; 
     if (system_bus(pc, &inst, READ))

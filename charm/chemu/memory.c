@@ -118,12 +118,15 @@ void load_memory(char *filename) {
         if (buf[0] == '.') { // directive 
             directive = 1;
             if (strlen(buf) > 5) { // directive has a number
-                if (buf[6] == '0' && buf[7] =='x') {
+                int numpos = 6;    // position of number on directive line
+                if (buf[1] == 's') // .stack is 6 chars
+                    numpos = 7;    // position of number on .stack directive
+                if (buf[numpos] == '0' && buf[numpos+1] =='x') {
                     base = 16;
-                    pos = 8;
+                    pos = numpos + 2;
                 }
                 else 
-                    pos = 6;
+                    pos = numpos;
             }
             else
                 directive = 2; // directive without a number

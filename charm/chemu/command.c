@@ -215,7 +215,7 @@ int do_cmd(int argc, char **cmdargv) {
             show_mem_changed();
         }
     } else if (cmdargv[0][0] == 'd') {
-        int t = 0;
+        int t = 0, mem_dump_inc = 0;
         if (argc > 1) { // at least d addr or d symbol
             if (cmdargv[1][0] >= 'a' && cmdargv[1][0] <= 'z') { // d symbol
                 t = dictget(cmdargv[1]);
@@ -234,13 +234,15 @@ int do_cmd(int argc, char **cmdargv) {
             if (dump_memory(mem_dump_addr, mem_dump_len)) {
                 printres("%s", "Invalid address");
             } 
+            mem_dump_inc = mem_dump_len;
         }
         else {
             if (dump_memory_word(mem_dump_addr, mem_dump_len)) {
                 printres("%s", "Invalid address");
-            } 
+            }
+            mem_dump_inc = mem_dump_len * 4;
         }
-        mem_dump_addr += mem_dump_len;
+        mem_dump_addr += mem_dump_inc;
     } else if (cmdargv[0][0] == 'l' && cmdargv[0][1] == 'd') {
       if (argc != 2) { // must issue ld filename
           printres("%s", "format is ld filename");
