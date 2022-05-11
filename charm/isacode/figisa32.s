@@ -23,7 +23,7 @@
 .label code
 .label main
 // int ia[] = {1,2,3,4,80,6,7,8,9,10};
-sbi r13, r13, #48 // space for ia[10], largest, and r14
+sub r13, r13, #48 // space for ia[10], largest, and r14
 mov r2, #1
 str r2, [r13, #0] // ia[0] = 1
 mov r2, #2
@@ -66,7 +66,7 @@ bal end               // endless loop
 // r0 has address of int array
 // r1 has num of elements in array
 .label largest
-sbi r13, r13, #20   // space for largest, i, r4, r5, and lr
+sub r13, r13, #20   // space for largest, i, r4, r5, and lr
 str r4, [r13, #8]   // save r4 on stack
 str r5, [r13, #12]  // save r5 on stack
 str r14, [r13, #16] // save lr on stack
@@ -82,7 +82,7 @@ blt skip
 mov r2, r5          // update largest
 str r2, [r13, #0]   // largest = a[i]
 .label skip
-adi r3, r3, #1
+add r3, r3, #1
 str r3, [r13, #4]   // for ( ; ; i++)
 cmp r3, r1          // for( ; i < size; )
 blt loop            // continue looping until i >= size
@@ -90,6 +90,6 @@ mov r0, r2          // place largest in r0
 ldr r4, [r13, #8]   // restore r4
 ldr r5, [r13, #12]  // restore r5
 ldr r14, [r13, #16] // restore lr
-adi r13, r13, #20   // restore r13
+add r13, r13, #20   // restore r13
 mov r15, r14        // return to caller
 

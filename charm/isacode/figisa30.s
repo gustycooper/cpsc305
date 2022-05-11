@@ -31,18 +31,18 @@
 .text 0x200
 .label code
 .label do_something
-sbi r13,r13,#4
+sub r13,r13,#4
 str r14,[r13]
 // function entry sequence is previous two instructions
 mva r1, strfmt   // addr of strfmt to r1
 ker 0x11         // call printf
 // function exit sequence is the next three instructions
 ldr r14,[r13]
-adi r13,r13,#4
+add r13,r13,#4
 mov r15, r14     // return
 
 .label add2
-sbi r13,r13,#16  // stack space
+sub r13,r13,#16  // stack space
 str r0,[r13,#0]  // Put a on stk
 str r1,[r13,#4]  // Put b on stk
 // sum is at [r13,#8]
@@ -65,11 +65,11 @@ ldr r1,[r13,#4] // put b into r1
 add r0,r0,r1    // a+b to r0
 // function exit sequence is the next three instructions
 ldr lr,[r13,#12] // restore lr
-adi r13,r13,#16 // restore r13
+add r13,r13,#16 // restore r13
 mov r15, r14    // return
 .text 0x300
 .label main
-sbi r13,r13,#16 // stack space, a, b, sum, and lr on stack
+sub r13,r13,#16 // stack space, a, b, sum, and lr on stack
 mov r0,1
 str r0,[r13]    // int a = 1;
 mov r0,2
