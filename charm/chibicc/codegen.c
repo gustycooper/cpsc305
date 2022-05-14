@@ -126,11 +126,11 @@ static void println(char *fmt, ...) {
   //printf("in println\n");
   va_list ap;
   va_start(ap, fmt);
-  //vfprintf(output_file, fmt, ap);
-  vprintf(fmt, ap);
+  vfprintf(output_file, fmt, ap);
+  //vprintf(fmt, ap);
   va_end(ap);
-  //fprintf(output_file, "\n");
-  printf("\n");
+  fprintf(output_file, "\n");
+  //printf("\n");
 }
 
 static int count(void) {
@@ -200,7 +200,7 @@ static void gen_addr(Node *node) {
     // Local variable
     if (node->var->is_local) {
       if (V) println("  // local variable %s, offset: %d", node->var->name, -node->var->offset); // GUSTY
-      println("  adi r7, r12, #%d     // addr of %s to r7", -node->var->offset, node->var->name); // GUSTY
+      println("  add r7, r12, #%d     // addr of %s to r7", -node->var->offset, node->var->name); // GUSTY
       return;
     }
 
@@ -279,7 +279,7 @@ static void gen_addr(Node *node) {
     return;
   case ND_MEMBER:
     gen_addr(node->lhs);
-    println("  adi r7, r7, #%d // add member offset", node->member->offset); // GUSTY
+    println("  add r7, r7, #%d // add member offset", node->member->offset); // GUSTY
     return;
   case ND_FUNCALL:
     if (node->ret_buffer) {
@@ -433,50 +433,50 @@ static char i32i8[] = "movsbl %al, %eax";
 static char i32u8[] = "movzbl %al, %eax";
 static char i32i16[] = "movswl %ax, %eax";
 static char i32u16[] = "movzwl %ax, %eax";
-static char i32f32[] = "i2f r7, r7 // convert int to float";
+static char i32f32[] = "itf r7, r7 // convert int to float";
 static char i32i64[] = "// convert int to double";
-static char i32f64[] = "i2f r7, r7 // convert int to double (float for Charm)";
-static char i32f80[] = "i2f r7, r7 // convert int to long double (float for Charm)";
+static char i32f64[] = "itf r7, r7 // convert int to double (float for Charm)";
+static char i32f80[] = "itf r7, r7 // convert int to long double (float for Charm)";
 
-static char u32f32[] = "i2f r7, r7 // convert uint to float - not correct";
+static char u32f32[] = "itf r7, r7 // convert uint to float - not correct";
 static char u32i64[] = "// convert uint to double - not correct";
-static char u32f64[] = "i2f r7, r7 // convert uint to double (float for Charm) - not correct";
-static char u32f80[] = "i2f r7, r7 // convert uint to long double (float for Charm) - not correct";
+static char u32f64[] = "itf r7, r7 // convert uint to double (float for Charm) - not correct";
+static char u32f80[] = "itf r7, r7 // convert uint to long double (float for Charm) - not correct";
 
-static char i64f32[] = "i2f r7, r7 // convert long to float";
-static char i64f64[] = "i2f r7, r7 // convert long to double";
-static char i64f80[] = "i2f r7, r7 // convert long to long double";
+static char i64f32[] = "itf r7, r7 // convert long to float";
+static char i64f64[] = "itf r7, r7 // convert long to double";
+static char i64f80[] = "itf r7, r7 // convert long to long double";
 
-static char u64f32[] = "i2f r7, r7 // convert ulong to float";
-static char u64f64[] = "i2f r7, r7 // convert ulong to double";
-static char u64f80[] = "i2f r7, r7 // convert ulong to long double";
-static char f32i8[] = "f2i r7, r7 // convert float to char"
+static char u64f32[] = "itf r7, r7 // convert ulong to float";
+static char u64f64[] = "itf r7, r7 // convert ulong to double";
+static char u64f80[] = "itf r7, r7 // convert ulong to long double";
+static char f32i8[] = "fti r7, r7 // convert float to char"
                        "\n  mov r6, #0xff"
                        "\n  and r7, r7, r6";
-static char f32u8[] = "f2i r7, r7 // convert float to uchar"
+static char f32u8[] = "fti r7, r7 // convert float to uchar"
                        "\n  mov r6, #0xff"
                        "\n  and r7, r7, r6";
-static char f32i16[] = "f2i r7, r7 // convert float to short";
-static char f32u16[] = "f2i r7, r7 // convert float to ushort";
-static char f32i32[] = "f2i r7, r7 // convert float to int";
-static char f32u32[] = "f2i r7, r7 // convert float to uint";
-static char f32i64[] = "f2i r7, r7 // convert float to long";
-static char f32u64[] = "f2i r7, r7 // convert float to ulong";
+static char f32i16[] = "fti r7, r7 // convert float to short";
+static char f32u16[] = "fti r7, r7 // convert float to ushort";
+static char f32i32[] = "fti r7, r7 // convert float to int";
+static char f32u32[] = "fti r7, r7 // convert float to uint";
+static char f32i64[] = "fti r7, r7 // convert float to long";
+static char f32u64[] = "fti r7, r7 // convert float to ulong";
 static char f32f64[] = "// convert float to double";
 static char f32f80[] = "// convert float to long double";
 
-static char f64i8[] = "f2i r7, r7 // convert double to char"
+static char f64i8[] = "fti r7, r7 // convert double to char"
                        "\n  mov r6, #0xff"
                        "\n  and r7, r7, r6";
-static char f64u8[] = "f2i r7, r7 // convert double to uchar"
+static char f64u8[] = "fti r7, r7 // convert double to uchar"
                        "\n  mov r6, #0xff"
                        "\n  and r7, r7, r6";
-static char f64i16[] = "f2i r7, r7 // convert double to short";
-static char f64u16[] = "f2i r7, r7 // convert double to ushort";
-static char f64i32[] = "f2i r7, r7 // convert double to int";
-static char f64u32[] = "f2i r7, r7 // convert double to uint";
-static char f64i64[] = "f2i r7, r7 // convert double to long";
-static char f64u64[] = "f2i r7, r7 // convert double to ulong";
+static char f64i16[] = "fti r7, r7 // convert double to short";
+static char f64u16[] = "fti r7, r7 // convert double to ushort";
+static char f64i32[] = "fti r7, r7 // convert double to int";
+static char f64u32[] = "fti r7, r7 // convert double to uint";
+static char f64i64[] = "fti r7, r7 // convert double to long";
+static char f64u64[] = "fti r7, r7 // convert double to ulong";
 static char f64f32[] = "// convert double to float";
 static char f64f80[] = "// convert double to long double";
 
@@ -979,7 +979,7 @@ static void gen_expr(Node *node) {
     gen_expr(node->lhs);
     println("  mov r6, #0");
     println("  sub r7, r6, r7 // 0 - r7 to negate r7");
-    println("  sbi r7, r7, 1  // create one's complement");
+    println("  sub r7, r7, 1  // create one's complement");
     //println("  one r7, r7"); // Do I want a one instruction for one's complement
     return;
   case ND_LOGAND: {
@@ -1538,6 +1538,16 @@ static void emit_data(Obj *prog) {
       }
       if (var->name[0] == '.')
         println("// .label %s", var->name);
+    /*
+      Global functions get a compiler generated label followed by their ASCII name. Two of these actually.
+      Compiler labels are LL__. I want to omit these labels and data, but there are other compiler generated
+      labels I want to keep.
+      else if (var->name[0] == 'L' && var->name[1] == 'L' && var->name[2] == '_' && var->name[3] == '_' &&
+               var->ty->kind == TY_FUNC) { <<-- This is not TY_FUNC
+        println("// .label %s", var->name);
+        continue;
+      }
+     */
       else
         println(".label %s", var->name);
 
@@ -1688,7 +1698,7 @@ static void emit_text(Obj *prog) {
     if (fn->va_area)
         stack_size = stack_size + fn->va_area->offset;
     //printf("GUSTY: fn->stack_size: %d\n", fn->stack_size);
-    println("  sbi r13, r13, #%d   // carve stack", stack_size + REG_SPACE);
+    println("  sub r13, r13, #%d   // carve stack", stack_size + REG_SPACE);
     // __reg_save_area__ // GUSTY - save regs used by function
     println("  str r14, [r13, #%d] // save lr on stack", off + stack_size  + REG_SPACE - 16);
     println("  str r12, [r13, #%d] // save fp on stack", off + stack_size  + REG_SPACE - 20);
@@ -1779,7 +1789,7 @@ static void emit_text(Obj *prog) {
     println("  ldr r6, [sp, #%d]   // restore r6 from stack", off + fn->stack_size + REG_SPACE - 24);
     println("  ldr r7, [sp, #%d]   // restore r7 from stack", off + fn->stack_size + REG_SPACE - 28);
     println("  ldr r10, [sp, #%d]  // restore r10 from stack",off + fn->stack_size + REG_SPACE - 32);
-    println("  adi sp, sp, #%d     // restore stack", fn->stack_size + REG_SPACE);
+    println("  add sp, sp, #%d     // restore stack", fn->stack_size + REG_SPACE);
     println("  mov pc, lr          // return");
   }
 }

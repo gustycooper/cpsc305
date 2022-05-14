@@ -395,6 +395,7 @@ static char *create_tmpfile(void) {
 static void run_subprocess(char **argv) {
   // If -### is given, dump the subprocess's command line.
   if (opt_hash_hash_hash) {
+  //if (1) {
     fprintf(stderr, "%s", argv[0]);
     for (int i = 1; argv[i]; i++)
       fprintf(stderr, " %s", argv[i]);
@@ -572,7 +573,9 @@ static void cc1(void) {
 }
 
 static void assemble(char *input, char *output) {
-  char *cmd[] = {"as", "-c", input, "-o", output, NULL};
+  //char *cmd[] = {"as", "-c", input, "-o", output, NULL};
+  char *cmd[] = {"chasm", input, NULL};
+  //printf("HERE: %s, %s\n", input, output);
   run_subprocess(cmd);
 }
 
@@ -706,6 +709,9 @@ int main(int argc, char **argv) {
   init_macros();
   parse_args(argc, argv);
 
+  if (opt_c)
+    opt_S = false;
+
   if (opt_cc1) {
     add_default_include_paths(argv[0]);
     cc1();
@@ -773,8 +779,11 @@ int main(int argc, char **argv) {
     }
 
     // Compile and assemble
+    // Generate file.s and file.o
     if (opt_c) {
-      char *tmp = create_tmpfile();
+      //char *tmp = create_tmpfile();
+      // The tmp is not really temp. The .s remains as does the .o
+      char *tmp = replace_extn(input, ".s");
       run_cc1(argc, argv, input, tmp);
       assemble(tmp, output);
       continue;
