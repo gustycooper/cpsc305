@@ -259,9 +259,10 @@ static void gen_addr(Node *node) {
           println("  mva r7, 0x7000   // addr of func printf");
         else if (strcmp(node->var->name, "scanf") == 0)
           println("  mva r7, 0x7050   // addr of func scanf");
-        else
+        else {
           println("  // external function %s\n", node->var->name);
-        //println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+          println("  mva r7, %s", node->var->name);
+        }
       }
       return;
     }
@@ -874,7 +875,8 @@ static void gen_expr(Node *node) {
 
     println("  mov r6, #0");
     println("  sub r7, r6, r7 // 0 - r7 to negate r7");
-    //println("  neg r7, r7"); // Do I want a neg instruction
+    //println("  one r7, r7"); // Do I want a neg instruction
+    //println("  add r7, r7, 1"); // Do I want a neg instruction
     return;
   case ND_VAR:
     gen_addr(node);
@@ -958,9 +960,9 @@ static void gen_expr(Node *node) {
     println("  beq LL_else_%d", c);
     gen_expr(node->then);
     println("  bal LL_end_%d", c);
-    println(".label LL_else_%d", c);
+    println(".local LL_else_%d", c);
     gen_expr(node->els);
-    println(".label LL_end_%d", c);
+    println(".local LL_end_%d", c);
     return;
   }
   case ND_NOT: {
@@ -970,9 +972,9 @@ static void gen_expr(Node *node) {
     println("  beq LL_false_%d", c);
     println("  mov r7, #1");
     println("  bal LL_end_%d", c);
-    println(".label LL_false_%d", c);
+    println(".local LL_false_%d", c);
     println("  mov r7, #0");
-    println(".label LL_end_%d", c);
+    println(".local LL_end_%d", c);
     return;
   }
   case ND_BITNOT:
@@ -992,9 +994,9 @@ static void gen_expr(Node *node) {
     println("  beq LL_false_%d", c);
     println("  mov r7, #1");
     println("  bal LL_end_%d", c);
-    println(".label LL_false_%d", c);
+    println(".local LL_false_%d", c);
     println("  mov r7, #0");
-    println(".label LL_end_%d", c);
+    println(".local LL_end_%d", c);
     return;
   }
   case ND_LOGOR: {
@@ -1007,9 +1009,9 @@ static void gen_expr(Node *node) {
     println("  bne LL_true_%d", c);
     println("  mov r7, #0");
     println("  bal LL_end_%d", c);
-    println(".label LL_true_%d", c);
+    println(".local LL_true_%d", c);
     println("  mov r7, #1");
-    println(".label LL_end_%d", c);
+    println(".local LL_end_%d", c);
     return;
   }
 /* TODO
@@ -1190,7 +1192,7 @@ TODO - Study C atomics (like semaphores) and update the following two cases
         println("  ble LL_cond_%d", c);
       }
       println("  mov r7, #0");
-      println(".label LL_cond_%d", c);
+      println(".local LL_cond_%d", c);
       return;
     }
 
@@ -1275,19 +1277,16 @@ TODO - Study C atomics (like semaphores) and update the following two cases
         println("  ble LL_cond_%d", c);
     }
     println("  mov r7, #0");
-    println(".label LL_cond_%d", c);
+    println(".local LL_cond_%d", c);
 
     return;
   case ND_SHL:
-    println("  mov %%rdi, %%rcx");
-    println("  shl %%cl, %s", ax);
+    println("  shf %s, %s", ax, di);
     return;
   case ND_SHR:
-    println("  mov %%rdi, %%rcx");
-    if (node->lhs->ty->is_unsigned)
-      println("  shr %%cl, %s", ax);
-    else
-      println("  sar %%cl, %s", ax);
+    println("  one %s, %s // shift right - negative shift value", di, di);
+    println("  add %s, %s, 1", di, di);
+    println("  shf %s, %s", ax, di);
     return;
   }
 
@@ -1305,55 +1304,57 @@ static void gen_stmt(Node *node) {
     println("  beq LL_else_%d", c);
     gen_stmt(node->then);
     println("  bal LL_end_%d", c);
-    println(".label LL_else_%d", c);
+    println(".local LL_else_%d", c);
     if (node->els)
       gen_stmt(node->els);
-    println(".label LL_end_%d", c);
+    println(".local LL_end_%d", c);
     return;
   }
   case ND_FOR: {
     int c = count();
     if (node->init)
       gen_stmt(node->init);
-    println(".label LL_begin_%d", c);
+    println(".local LL_begin_%d", c);
     if (node->cond) {
       gen_expr(node->cond);
       cmp_zero(node->cond->ty);
       println("  beq %s", node->brk_label);
     }
     gen_stmt(node->then);
-    println(".label %s", node->cont_label);
+    println(".local %s", node->cont_label);
     if (node->inc)
       gen_expr(node->inc);
     println("  bal LL_begin_%d", c);
-    println(".label %s", node->brk_label);
+    println(".local %s", node->brk_label);
     return;
   }
   case ND_DO: {
     int c = count();
-    println(".label LL_begin_%d", c);
+    println(".local LL_begin_%d", c);
     gen_stmt(node->then);
-    println(".label %s", node->cont_label);
+    println(".local %s", node->cont_label);
     gen_expr(node->cond);
     cmp_zero(node->cond->ty);
     println("  jne LL_begin_%d", c);
-    println(".label %s", node->brk_label);
+    println(".local %s", node->brk_label);
     return;
   }
   case ND_SWITCH:
     gen_expr(node->cond);
 
     for (Node *n = node->case_next; n; n = n->case_next) {
-      char *ax = (node->cond->ty->size == 8) ? "%rax" : "%eax";
-      char *di = (node->cond->ty->size == 8) ? "%rdi" : "%edi";
+      //char *ax = (node->cond->ty->size == 8) ? "%rax" : "%eax";
+      //char *di = (node->cond->ty->size == 8) ? "%rdi" : "%edi";
+      char *ax = "r7";
+      char *di = "r6";
 
       if (n->begin == n->end) {
-        println("  cmp $%ld, %s", n->begin, ax);
-        println("  je %s", n->label);
+        println("  cmp %s, %ld", ax, n->begin);
+        println("  beq %s", n->label);
         continue;
       }
 
-      // [GNU] Case ranges
+      // [GNU] Case ranges HERE - SWITCH
       println("  mov %s, %s", ax, di);
       println("  sub $%ld, %s", n->begin, di);
       println("  cmp $%ld, %s", n->end - n->begin, di);
@@ -1365,10 +1366,10 @@ static void gen_stmt(Node *node) {
 
     println("  bal %s", node->brk_label);
     gen_stmt(node->then);
-    println(".label %s", node->brk_label);
+    println(".local %s", node->brk_label);
     return;
   case ND_CASE:
-    println(".label %s", node->label);
+    println(".local %s", node->label);
     gen_stmt(node->lhs);
     return;
   case ND_BLOCK:
@@ -1501,8 +1502,21 @@ static void emit_data(Obj *prog) {
   if (V) println("// data section");
   println(".data 0x100");
   for (Obj *var = prog; var; var = var->next) {
-    if (var->is_function || !var->is_definition)
+    //println("Gusty: var->name: %s, var->is_definition: %d, var->is_function: %d\n", var->name, var->is_definition, var->is_function);
+    // Original code was the following two lines
+    //if (var->is_function || !var->is_definition)
+    //  continue;
+
+    // I want to emit .extern statements for external functions and variables
+    if (var->is_function && var->is_definition) // function is defined in this .c file
       continue;
+
+    if (!var->is_definition) {
+      if (strcmp(var->name, "printf") == 0 || strcmp(var->name, "scanf") == 0)
+        continue;
+      println(".extern %s", var->name);
+      continue;
+    }
 
     if (V) {
       if (var->is_static)
@@ -1548,10 +1562,12 @@ static void emit_data(Obj *prog) {
         continue;
       }
      */
-      else
-        println(".label %s", var->name);
-
-      //println("Gusty: var->ty->size: %d\n", var->ty->size);
+      else {
+        if (var->name[0] == 'L' && var->name[1] == 'L')
+            println(".local %s", var->name);
+        else
+            println(".label %s", var->name);
+      }
 
 /* TODO
 The following code generates 32-bit values for static data
@@ -1778,7 +1794,7 @@ static void emit_text(Obj *prog) {
       println("  mov r0, #0       // end of main without return returns a 0"); // GUSTY
 
     // Epilogue // GUSTY
-    println(".label LL_return_%s", fn->name); 
+    println(".local LL_return_%s", fn->name); 
     if (strcmp(fn->name, "main") == 0) {
       println("  bal LL_return_%s // loop on self for main", fn->name);
       println("                   // Future - main can return to OS");

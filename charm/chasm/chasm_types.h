@@ -21,6 +21,8 @@ enum inst_t {
     ioi, adi, sbi,
 };
 
+typedef enum sections { DATA=1, TEXT, STACK } sections;
+
 struct inst_info {
     int inst_int;
     char inst_str[4];
@@ -46,6 +48,7 @@ struct toki_t {
     int  numtoks;                   // num of toks on line
     int  linenum;                   // line number
     int  address;                   // mem address of this line
+    enum sections section;          // section of address
     enum toks_t linetype;           // type of line
     enum inst_t insttype;           // if line is inst_t, is ins type - ldr, mov, etc
     enum inst_c instcate;           // if line is inst_t, is ins categor - ldrstr, arilog, etc

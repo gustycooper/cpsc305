@@ -133,8 +133,8 @@ void load_memory(char *filename) {
         }
         else if (symbols) { // processing symbols
             char symbol[40];
-            int value;
-            sscanf(buf, "%s %d", symbol, &value);
+            int value, symsection; // symsection used by chlinker
+            sscanf(buf, "%s %x %d", symbol, &value, &symsection);
             dictput(symbol, value);
             // printf("%s %d\n", symbol, value);
         }

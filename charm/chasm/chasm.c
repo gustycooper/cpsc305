@@ -5,9 +5,9 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <fcntl.h>
-#include "dict.h"
 #include "fsms.h"
 #include "chasm_types.h"
+#include "dict.h"
 #include "charmopcodes.h"
 
 /* enums, structs, and array ins[]
@@ -121,7 +121,7 @@ void toksvalue(char *t, int n) {
         tok.toks[n].toktype = data;
     else if (strcmp(t, ".text") == 0)
         tok.toks[n].toktype = text;
-    else if (strcmp(t, ".label") == 0)
+    else if (strcmp(t, ".label") == 0 || strcmp(t, ".local") == 0 || strcmp(t, ".extern") == 0)
         tok.toks[n].toktype = label;
     else if (strcmp(t, ".string") == 0)
         tok.toks[n].toktype = string;
@@ -251,7 +251,7 @@ void tokenize() {
   tokenized line displayed on stdout
  */
 void printtok(struct toki_t t) {
-    printf("linenum: %d, line type: %s, numtoks: %d, address: %d\n", t.linenum, toks_t_str[t.linetype], t.numtoks, t.address);
+    printf("linenum: %d, line type: %s, numtoks: %d, address: %d section: %d\n", t.linenum, toks_t_str[t.linetype], t.numtoks, t.address, t.section);
     if (t.linetype == inst) {
         printf("  inst type: %s, ", ins[t.insttype].inst_str);
         printf("  inst cate: %d, ", t.instcate);
@@ -274,20 +274,47 @@ void printtok(struct toki_t t) {
   toks[i].address - lines that are number or inst have an address
   toks[i].instopcd - lines that are inst have an instruction opcode
   symbol table - lines that are labels are added to symbol table - key is label, value is address
-  NOTE: Symbole table maintained via dictput function
+  NOTE: Symbol table maintained via dictput function
   struct toki_t toks[].address - address of all labels, numbers, and instructions filled in
   struct toki_t toks[].instopcd - opcodes of instructions filled in
  */
 void addrsymopcode() {
     int address = 0;  // assume code/data is at address 0
+    enum sections section = DATA; // section: DATA, TEXT
     for (int i = 0; i < linenum-1; i++) {
+        if (toks[i].linetype == data)
+            section = DATA;
+        else if (toks[i].linetype == text)
+            section = TEXT;
         // .text 0x200 and .data 0x300 directives control addresses of code/data
         if ((toks[i].linetype == data || toks[i].linetype == text) && toks[i].numtoks == 3)
             address = toks[i].toks[1].tokv; // update address based on .data and .text directives
         else if (toks[i].linetype == label) {
-            toks[i].address = address;
-            if (dictput(toks[i].toks[1].tok_str, toks[i].address)) // add to symbol table
-                toks[i].linetype = err;     // duplicate symbole
+            if (toks[i].toks[0].tok_str[2] == 'a') { // .label directive
+                toks[i].address = address;
+                toks[i].section = section;
+                if (dictput(toks[i].toks[1].tok_str, toks[i].address, toks[i].section)) // add to symbol table
+                    toks[i].linetype = err;     // duplicate symbol
+            }
+            else {
+                toks[i].address = address;
+                toks[i].section = section;
+                struct dictval dv;
+                dv.key = toks[i].toks[1].tok_str;
+                dv.section = toks[i].section;
+                if (toks[i].toks[0].tok_str[2] == 'o') { // .local directive
+                    dv.ivalue = toks[i].address;
+                    dv.type = LOCAL;
+                    dv.svalue = 0;
+                }
+                else {
+                    dv.type = STRING;
+                    dv.ivalue = 0;
+                    dv.svalue = "XXXXX";
+                }
+                if (dictputval(&dv))
+                    toks[i].linetype = err;     // duplicate symbol
+            }
         }
         else if (toks[i].linetype == number || toks[i].linetype == inst) {
             toks[i].address = address;
@@ -338,12 +365,22 @@ void addrsymopcode() {
  */
 void identifiers() {
     for (int i = 0; i < linenum-1; i++)
-        if (toks[i].linetype == inst)
+        if (toks[i].linetype == inst || toks[i].linetype == ident)
             for (int j = 0; j < toks[i].numtoks-1; j++) // numtoks-1 to ignore endd token
                 if (toks[i].toks[j].toktype == ident) {
-                    toks[i].toks[j].tokv = dictget(toks[i].toks[j].tok_str);
-                    if (toks[i].toks[j].tokv == -1000001)
+                // HERE
+                    struct dictval dv;
+                    if (dictgetval(toks[i].toks[j].tok_str, &dv))
                         toks[i].linetype = err;
+                    else {
+                        if (dv.type == INT || dv.type == LOCAL)
+                            toks[i].toks[j].tokv = dv.ivalue;
+                        else
+                            toks[i].toks[j].tokv = 0xfffff;
+                    }
+                    //toks[i].toks[j].tokv = dictget(toks[i].toks[j].tok_str);
+                    //if (toks[i].toks[j].tokv == -1000001)
+                    //    toks[i].linetype = err;
                 }
 }
 
@@ -360,7 +397,7 @@ void identifiers() {
 int errors() {
     int errorfound = 0;
     for (int i = 0; i < linenum-1; i++) {
-        if (toks[i].linetype > comment && toks[i].linetype != number) {
+        if (toks[i].linetype > comment && toks[i].linetype != number && toks[i].linetype != ident) {
             fprintf(stderr, "+++ Error +++ Line number: %d\n", toks[i].linenum);
             for (int j = 0; j < toks[i].numtoks-1; j++) // numtoks-1 to ignore endd token
                 fprintf(stderr, "%s ", toks[i].toks[j].tok_str);
@@ -376,6 +413,20 @@ int verbose = 0;  // non-zero turns on verbose output - debug information
 int symbols = 1;  // zero suppresses symbols from output - useful for OS
 
 /*
+ TODO
+ I currently recoginize instructions referencing external symbols as those with the largest 20-bit address.
+ Symbols in dictionary can be type INT or type STRING. 
+ Type INT symbols have an integer value. Type STRING symbols do not.
+ Type STRING symbols are added to dictionary for .extern gusty directives.
+   gusty has a string value of XXXXX
+ When a symbol of type STRING is fetched from the dictionary, the token value is set to 0xfffff.
+   toks[i].toks[j].tokv = 0xfffff;
+ I use this 0xfffff value in generated code to recognize ldr, ldb, str, stb, and mva instructions
+ that are referencing external symbols.
+ This approach works, but it is an awkward design - using the largest 20-bit address to mark externals.
+ */
+
+/*
  generatecode - generate code to stdout
  inputs
   struct toki_t toks[] - array of all lines in assembly file
@@ -387,6 +438,7 @@ void generatecode() {
     int instr, opcode, rd, rm, rn, imm;
     for (int i = 0; i < linenum-1; i++) {
         if (toks[i].linetype == inst) {
+          char xtern = 0;
           opcode = toks[i].instopcd;
           switch (toks[i].instcate) {
             case ldrstr:
@@ -395,6 +447,8 @@ void generatecode() {
                 case ADDR: // ldr rd, addr
                     imm = toks[i].toks[3].tokv & 0xfffff;
                     instr = opcode << 24 | rd << 20 | imm;
+                    if (imm == 0xfffff) // This works for now. Largest 20-bit addr
+                        xtern = 1;
                     break;
                 case BASE: // ldr rd, [rm]
                     rm = toks[i].toks[4].tokv;
@@ -425,7 +479,13 @@ void generatecode() {
                     break;
               }
               if (verbose)
-                  printf("ldrstr: 0x%08x\n", instr);
+                  printf("ldrstr: ");
+              if (xtern) { // extract opcode and reg from instr
+                  int opreg = (instr >> 20) & 0xfff; // & incase >> is arithmetic
+                  printf("0x%03x", opreg);
+                  printf("XXXXX");
+                  printf(" %s\n", toks[i].toks[3].tok_str);
+              }
               else
                   printf("0x%08x\n", instr);
                 
@@ -455,6 +515,10 @@ void generatecode() {
                   rd = toks[i].toks[1].tokv;
                   imm = toks[i].toks[3].tokv & 0xfffff;
                   instr = opcode << 24 | rd << 20 | imm;
+                  if ((opcode & 0xf) == MVA && imm == 0xfffff) { // This works for now. Largest 20-bit addr
+                      printf("0x%02x%xXXXXX %s\n", opcode, rd, toks[i].toks[3].tok_str);
+                      break;
+                  }
               }
               if (verbose)
                   printf("movcmp: 0x%08x\n", instr);
@@ -502,7 +566,7 @@ void generatecode() {
               break;
           }
         }
-        else if (toks[i].linetype == number) {
+        else if (toks[i].linetype == number || toks[i].linetype == ident) {
             if (verbose)
                 printf("number: 0x%08x\n", toks[i].toks[0].tokv);
             else
