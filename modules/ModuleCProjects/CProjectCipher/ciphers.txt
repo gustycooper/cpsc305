@@ -1,0 +1,151 @@
+# Triplet 1
+encrypt caesar
+0
+Caesar encryption with a key of 0 is the string.
+# Triplet 2
+encrypt caesar
+# Comment within a triplet
+2626
+Caesar encryption with a key of 2626 is the string.
+# Triplet 3
+encrypt caesar
+N
+Caesar encryption with a key of the letter N is the string.
+# Triplet 4
+encrypt caesar
+e
+Li brxu Fdhvdu zrunv/ wklv lv uhdgdeoh$
+# Triplet 5
+encrypt caesar
+default
+# Another comment in a triplet
+The default Caesar key is 1. AbcZ7! becomes BcdA8"
+# Triplet 6
+decrypt caesar
+1
+Ifmmp" Hppeczf?
+# Triplet 7
+decrypt caesar
+Gusty
+G pcyjjw jgic :agnfcpq%9
+# Triplet 8
+encrypt augustus
+12
+gusty
+# Triplet 9
+encrypt augustus
+default
+gusty
+# Triplet 10
+decrypt augustus
+12
+tifhl
+# Triplet 11
+decrypt augustus
+default
+tifhl
+# Triplet 12
+decrypt augustus
+72345
+Btbcg5
+# Triplet 13
+encrypt aes
+default
+gusty
+# Triplet 14
+encrypt aes
+2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c
+gusty
+# Triplet 15
+decrypt aes
+default
+46 59 65 9d ca 2b 85 d9 d4 64 ef e6 c7 ce 87 d0
+# Triplet 16
+decrypt aes
+2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c
+46 59 65 9d ca 2b 85 d9 d4 64 ef e6 c7 ce 87 d0
+# Triplet 17
+encrypt aes
+default
+A simple string!
+# Triplet 18
+decrypt aes
+default
+fb 2d 4b 02 a2 f0 5d 18 b8 db 2d 61 99 95 56 69
+# Triplet 19
+decrypt aes
+default
+# Look how long the next line is
+b4 69 32 a8 30 2b 7a 56 2e 3a 98 50 7e a3 77 58 2b f5 e9 a9 06 2a 12 9d d7 65 ea 97 a2 fa 9e 1a 65 44 89 27 53 c9 53 a6 cc 15 ba 6b 56 b9 6b b4 0f 68 27 82 bb 29 3e d7 73 84 cd 4d 7e f2 8b ab
+# Triplet 20
+encrypt augustus
+1234567890
+This is the time for all good people to come forward.
+# Triplet 21
+decrypt augustus
+1234567890
+Etvg yj mrp gwbu xhb myz wfgw aqbdau lh nazs vfjpkcp!
+# Triplet 22
+decrypt augustus
+1234567890
+Etvg yj mrp gwbu xhb myz rrv zpaczt kg qz ucbu%
+# Triplet 23
+encrypt aes
+53 74 72 61 77 62 65 72 72 79 46 69 65 6c 64 73
+Camp Giraffy will be held on Penny Lane!
+# Triplet 24
+decrypt aes
+53 74 72 61 77 62 65 72 72 79 46 69 65 6c 64 73
+9e 53 82 93 4f 83 93 5a 34 98 30 0d 90 1c c2 1a 37 f3 c7 73 45 e3 ac ad f7 f5 b4 77 94 96 34 1f b5 5b 72 7b 45 a2 1d 39 27 f4 86 98 ef 2c 3e 1a
+# Triplet 25
+encrypt aes
+31 32 32 37 37 20 50 65 6e 6e 79 20 4c 61 6e 65
+Camp Giraffy will be held on Strawberry Fields!
+# Triplet 26
+decrypt aes
+31 32 32 37 37 20 50 65 6e 6e 79 20 4c 61 6e 65
+59 65 a2 7f bc fe 94 d0 a9 ca e0 86 f8 2e 2c 54 77 f5 4d 49 b8 a2 5c ad f7 96 13 0d ee 43 1c 0c 1e 45 cb 70 b2 13 44 56 b3 9a fc 83 8b 9a ca fe
+#Triplet 27
+encrypt caesar
+Easy as ABC
+I am so tired! 465 ZZZ's.
+#Triplet 28
+decrypt caesar
+Easy as ABC
+Z rd jf kzivu2 +-, QQQ8j%
+#Triplet 29
+encrypt caesar
+512
+Speaking words of wisdom, code in C, code in C.
+#Triplet 30
+encrypt augustus
+512
+Speaking words of wisdom, code in C, code in C.
+#Triplet 31
+encrypt caesar
+0
+Cant Buy Me Love
+#Triplet 32
+encrypt caesar
+Cant Buy Me Love
+Cant Buy Me Love
+#Triplet 33
+encrypt augustus
+Cant Buy Me Love
+Cant Buy Me Love
+#Triplet 34
+encrypt aes
+43 61 6e 74 20 42 75 79 20 4d 65 20 4c 6f 76 65
+Cant Buy Me Love
+#Triplet 35
+decrypt caesar
+Cant Buy Me Love
+Cant Buy Me Love
+#Triplet 36
+decrypt augustus
+Cant Buy Me Love
+Jiub Jbg Ul Swcm
+#Triplet 37
+decrypt aes
+43 61 6e 74 20 42 75 79 20 4d 65 20 4c 6f 76 65
+8e 42 e4 90 59 1a 78 61 b0 0d b4 c9 db 1e a6 fc
