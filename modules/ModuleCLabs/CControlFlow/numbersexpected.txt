@@ -1,0 +1,22 @@
+smallest:  -606.60
+largest:  10001.01
+average:    945.70
+a[0]:  -606.60
+a[1]:    -5.00
+a[2]:     1.20
+a[3]:     2.10
+a[4]:     3.14
+a[5]:     3.15
+a[6]:     7.00
+a[7]:    10.00
+a[8]:    41.00
+a[9]: 10001.01
+total pairs: 45
+pairs within 5: 10
+while loop 1: 21
+while loop 2: 21
+for loop 1: 21
+for loop 2: 21
+Gusty, Gustz: Negative
+Gusty, Gusty: Zero
+Gusty, Gusta: Postive
